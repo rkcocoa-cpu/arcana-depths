@@ -1,0 +1,9 @@
+{
+  "name": "星詠みの迷宮 — ARCANA DEPTHS",
+  "short_name": "星詠みの迷宮",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080b12",
+  "theme_color": "#080b12"
+}

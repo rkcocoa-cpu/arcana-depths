@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#080b12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>星詠みの迷宮 — ARCANA DEPTHS</title>
+  <meta name="description" content="スマホで遊べる本格魔法ファンタジー・ローグライクRPG。4つの魔導士職、13種の呪文、18種の遺物、4つの階層バイオームと強大なボスが待ち受ける。">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d121d'/%3E%3Cpath d='M8 1l1.8 4.6L14.5 8l-4.7 2.4L8 15l-1.8-4.6L1.5 8l4.7-2.4z' fill='%23ffd27a'/%3E%3C/svg%3E">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <!-- ================= TITLE SCREEN ================= -->
+  <section id="screen-title" class="screen active">
+    <div class="title-bg"></div>
+    <div class="title-vignette"></div>
+    <canvas id="title-fx"></canvas>
+
+    <header class="title-head">
+      <div class="title-sub">ARCANA DEPTHS</div>
+      <h1 class="title-logo">星詠みの迷宮</h1>
+      <div class="title-tag">✦ 魔法と星屑のターン制ローグライク ✦</div>
+    </header>
+
+    <main class="title-menu">
+      <div class="title-meta">
+        <span id="title-best">最高到達: B1F</span>
+        <span class="title-dust">✦ 星屑 <strong id="title-dust">0</strong></span>
+      </div>
+
+      <button id="btn-continue" type="button" class="btn btn-teal" style="display:none">
+        <span>冒険を続ける</span>
+        <small id="continue-sub"></small>
+      </button>
+
+      <button id="btn-new-run" type="button" class="btn btn-gold">
+        <span>新たな冒険へ</span>
+        <small>4人の魔導士から選んで迷宮へ潜る</small>
+      </button>
+
+      <button id="btn-sanctuary" type="button" class="btn btn-outline">
+        <span>星詠みの聖域</span>
+        <small>星屑で恒久強化・魔導士解放</small>
+      </button>
+
+      <div class="title-row">
+        <button id="btn-codex" type="button" class="btn btn-outline btn-sm">魔導書・図鑑</button>
+        <button id="btn-title-settings" type="button" class="btn btn-outline btn-sm">設定</button>
+      </div>
+    </main>
+  </section>
+
+  <!-- ================= GAME SCREEN ================= -->
+  <section id="screen-game" class="screen">
+    <header class="hud-top">
+      <div class="hud-loc">
+        <div class="hud-floor-row">
+          <span id="hud-floor" class="floor-badge">B1F</span>
+          <span id="hud-biome" class="biome-name">苔むす地下墓所</span>
+        </div>
+        <div class="hud-res">
+          <span class="hud-gold">金貨 <strong id="hud-gold">0</strong>G</span>
+          <span id="hud-turn">T1</span>
+          <span>魔力 <strong id="stat-pow">0</strong></span>
+          <span>防御 <strong id="stat-def">0</strong></span>
+        </div>
+      </div>
+
+      <div class="hud-right">
+        <div id="mini-wrap" title="地図を拡大">
+          <canvas id="mini-canvas" width="96" height="96"></canvas>
+        </div>
+        <button id="btn-hud-sound" type="button" class="icon-btn" aria-label="Sound">♪</button>
+        <button id="btn-hud-menu" type="button" class="icon-btn" aria-label="Menu">≡</button>
+      </div>
+    </header>
+
+    <div class="hud-stats">
+      <div class="bars-row">
+        <div class="bar-box">
+          <div id="hp-fill" class="bar-fill hp-fill" style="width:100%"></div>
+          <div class="bar-label"><span>HP</span><span id="hp-text">28/28</span></div>
+        </div>
+        <div class="bar-box">
+          <div id="mp-fill" class="bar-fill mp-fill" style="width:100%"></div>
+          <div class="bar-label"><span>MP</span><span id="mp-text">24/24</span></div>
+        </div>
+      </div>
+      <div class="sub-stats">
+        <div class="lvl-wrap">
+          <span id="lvl-badge">Lv.1</span>
+          <div class="xp-bar"><div id="xp-fill" style="width:0%"></div></div>
+        </div>
+        <div id="status-pills"></div>
+      </div>
+    </div>
+
+    <div id="boss-bar">
+      <div class="boss-head">
+        <span id="boss-name">BOSS</span>
+        <span id="boss-hp-val">80/80</span>
+      </div>
+      <div class="boss-track"><div id="boss-hp-fill" style="width:100%"></div></div>
+    </div>
+
+    <div id="canvas-wrap">
+      <canvas id="game-canvas"></canvas>
+      <div id="log-preview" title="冒険の記録を開く"></div>
+
+      <button id="btn-stairs" type="button">階段を降りる ▼</button>
+
+      <div id="target-banner">
+        <span id="target-text">標的をタップ</span>
+        <button id="btn-cancel-target" type="button" class="btn btn-outline btn-sm">取消</button>
+      </div>
+
+      <div id="dpad-overlay">
+        <button type="button" data-dir="-1,-1">↖</button>
+        <button type="button" data-dir="0,-1">↑</button>
+        <button type="button" data-dir="1,-1">↗</button>
+        <button type="button" data-dir="-1,0">←</button>
+        <button type="button" data-dir="0,0">・</button>
+        <button type="button" data-dir="1,0">→</button>
+        <button type="button" data-dir="-1,1">↙</button>
+        <button type="button" data-dir="0,1">↓</button>
+        <button type="button" data-dir="1,1">↘</button>
+      </div>
+    </div>
+
+    <footer class="hud-bottom">
+      <div class="action-row">
+        <button id="act-explore" type="button" class="act-btn">探索</button>
+        <button id="act-wait" type="button" class="act-btn">待機</button>
+        <button id="act-bag" type="button" class="act-btn">鞄 <span id="bag-count" class="badge">0</span></button>
+        <button id="act-relics" type="button" class="act-btn">遺物</button>
+        <button id="act-dpad" type="button" class="act-btn">十字</button>
+      </div>
+      <div id="spell-bar" class="spell-bar"></div>
+    </footer>
+  </section>
+
+  <!-- ================= MODAL ================= -->
+  <div id="modal-backdrop">
+    <div id="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <span id="modal-title"></span>
+        <button id="modal-close" type="button">✕</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="./js/util.js"></script>
+  <script src="./js/data.js"></script>
+  <script src="./js/sprites.js"></script>
+  <script src="./js/dungeon.js"></script>
+  <script src="./js/map.js"></script>
+  <script src="./js/audio.js"></script>
+  <script src="./js/fx.js"></script>
+  <script src="./js/render.js"></script>
+  <script src="./js/game.js"></script>
+  <script src="./js/ui.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => G.UI.init());
+  </script>
+</body>
+</html>

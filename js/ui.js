@@ -16,7 +16,73 @@ G.UI = (function () {
   let activeModal = null;
   let titleMotes = [];
   let lastTime = performance.now();
-  let inspectRelicTimer = null;
+
+  const classPortraitURL = (id) => `./assets/portraits/class_${id}.webp`;
+  const bossPortraitURL = (id) => `./assets/portraits/boss_${id}.webp`;
+
+  function shrineBannerSVG() {
+    return `
+      <svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="星の祭壇">
+        <defs>
+          <linearGradient id="sh-bg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0a1020"/>
+            <stop offset="55%" stop-color="#13223b"/>
+            <stop offset="100%" stop-color="#090d18"/>
+          </linearGradient>
+          <radialGradient id="sh-beam" cx="50%" cy="42%" r="48%">
+            <stop offset="0%" stop-color="#9cf2ff" stop-opacity="0.72"/>
+            <stop offset="35%" stop-color="#48b8e0" stop-opacity="0.34"/>
+            <stop offset="72%" stop-color="#e8c170" stop-opacity="0.12"/>
+            <stop offset="100%" stop-color="#090d18" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="sh-stone" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3c4c68"/>
+            <stop offset="50%" stop-color="#253147"/>
+            <stop offset="100%" stop-color="#131926"/>
+          </linearGradient>
+          <linearGradient id="sh-gold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fff0a8"/>
+            <stop offset="55%" stop-color="#e8b84a"/>
+            <stop offset="100%" stop-color="#8c621c"/>
+          </linearGradient>
+        </defs>
+        <rect width="640" height="360" fill="url(#sh-bg)"/>
+        <!-- Vaulted archway & background ruins -->
+        <path d="M90 360 V155 C90 48 210 18 320 18 C430 18 550 48 550 155 V360 Z" fill="#0d1526" stroke="#22304a" stroke-width="4"/>
+        <path d="M135 360 V168 C135 80 230 52 320 52 C410 52 505 80 505 168 V360 Z" fill="#101a2e" stroke="#2c3e5e" stroke-width="3"/>
+        <rect x="0" y="292" width="640" height="68" fill="#0c121e"/>
+        <ellipse cx="320" cy="298" rx="220" ry="26" fill="none" stroke="#48a8d8" stroke-opacity="0.35" stroke-width="2"/>
+        <ellipse cx="320" cy="298" rx="165" ry="18" fill="none" stroke="#e8c170" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="10 6"/>
+        <!-- Celestial Aura -->
+        <circle cx="320" cy="148" r="158" fill="url(#sh-beam)"/>
+        <polygon points="278,0 362,0 342,250 298,250" fill="#7fe3ff" fill-opacity="0.08"/>
+        <!-- Pedestal & Ornate Chalice -->
+        <polygon points="222,300 418,300 398,274 242,274" fill="url(#sh-stone)" stroke="#080b12" stroke-width="3"/>
+        <rect x="256" y="206" width="128" height="68" rx="4" fill="url(#sh-stone)" stroke="#080b12" stroke-width="3"/>
+        <rect x="242" y="192" width="156" height="18" rx="4" fill="#465978" stroke="#080b12" stroke-width="3"/>
+        <!-- Carved rune inlay -->
+        <path d="M294 224 L320 212 L346 224 L320 260 Z" fill="#18283e" stroke="#7fe3ff" stroke-width="2"/>
+        <circle cx="320" cy="235" r="7" fill="#7fe3ff"/>
+        <!-- Floating Astral Star & Orb -->
+        <circle cx="320" cy="138" r="24" fill="#d8fbff" stroke="#7fe3ff" stroke-width="3"/>
+        <path d="M320 82 L331 125 L374 138 L331 151 L320 194 L309 151 L266 138 L309 125 Z" fill="url(#sh-gold)" stroke="#0c0e18" stroke-width="2.5"/>
+        <circle cx="320" cy="138" r="9" fill="#ffffff"/>
+        <!-- Orbiting Runes & Starlight -->
+        <circle cx="228" cy="142" r="4" fill="#ffd27a"/>
+        <circle cx="414" cy="128" r="4" fill="#7fe3ff"/>
+        <circle cx="262" cy="94" r="3" fill="#7fe3ff"/>
+        <circle cx="384" cy="96" r="3" fill="#ffd27a"/>
+        <circle cx="195" cy="198" r="2.5" fill="#9ce8ff"/>
+        <circle cx="445" cy="186" r="2.5" fill="#ffd27a"/>
+        <!-- Twin Candelabra Silhouette Glow -->
+        <rect x="166" y="214" width="12" height="78" fill="#1b2436" stroke="#080b12" stroke-width="2"/>
+        <circle cx="172" cy="206" r="18" fill="#ffcf60" fill-opacity="0.32"/>
+        <circle cx="172" cy="206" r="5" fill="#fff0a8"/>
+        <rect x="462" y="214" width="12" height="78" fill="#1b2436" stroke="#080b12" stroke-width="2"/>
+        <circle cx="468" cy="206" r="18" fill="#ffcf60" fill-opacity="0.32"/>
+        <circle cx="468" cy="206" r="5" fill="#fff0a8"/>
+      </svg>`;
+  }
 
   function init() {
     G.Spr.init();
@@ -60,21 +126,25 @@ G.UI = (function () {
     const c = $('#title-fx');
     if (!c) return;
     const rect = c.getBoundingClientRect();
-    if (c.width !== Math.floor(rect.width) || c.height !== Math.floor(rect.height)) {
-      c.width = Math.max(1, Math.floor(rect.width));
-      c.height = Math.max(1, Math.floor(rect.height));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.floor(rect.width * dpr));
+    const h = Math.max(1, Math.floor(rect.height * dpr));
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
     }
     const x = c.getContext('2d');
     x.clearRect(0, 0, c.width, c.height);
-    if (titleMotes.length < 36) {
+    if (titleMotes.length < 40) {
       titleMotes.push({
         x: Math.random() * c.width,
         y: c.height * (0.2 + Math.random() * 0.8),
-        vy: -12 - Math.random() * 18,
-        vx: (Math.random() - 0.5) * 8,
-        r: 1.5 + Math.random() * 2.5,
+        vy: (-12 - Math.random() * 18) * dpr,
+        vx: (Math.random() - 0.5) * 9 * dpr,
+        r: (1.4 + Math.random() * 2.4) * dpr,
         a: Math.random() * Math.PI * 2,
-        col: Math.random() < 0.65 ? '#ffd27a' : '#7fe3ff',
+        star: Math.random() < 0.25,
+        col: Math.random() < 0.6 ? '#ffd27a' : '#7fe3ff',
       });
     }
     for (let i = titleMotes.length - 1; i >= 0; i--) {
@@ -82,12 +152,37 @@ G.UI = (function () {
       m.x += m.vx * dt;
       m.y += m.vy * dt;
       m.a += dt * 3;
-      if (m.y < -10) { titleMotes.splice(i, 1); continue; }
-      x.globalAlpha = 0.35 + 0.45 * Math.abs(Math.sin(m.a));
+      if (m.y < -12 * dpr) { titleMotes.splice(i, 1); continue; }
+      const alpha = 0.28 + 0.52 * Math.abs(Math.sin(m.a));
+      x.save();
+      x.globalAlpha = alpha * 0.45;
       x.fillStyle = m.col;
-      x.fillRect(Math.round(m.x), Math.round(m.y), Math.ceil(m.r), Math.ceil(m.r));
+      x.beginPath();
+      x.arc(m.x, m.y, m.r * 2.2, 0, Math.PI * 2);
+      x.fill();
+      x.globalAlpha = alpha;
+      if (m.star) {
+        const s = m.r * 1.9;
+        x.fillStyle = '#ffffff';
+        x.beginPath();
+        x.moveTo(m.x, m.y - s);
+        x.lineTo(m.x + s * 0.28, m.y - s * 0.28);
+        x.lineTo(m.x + s, m.y);
+        x.lineTo(m.x + s * 0.28, m.y + s * 0.28);
+        x.lineTo(m.x, m.y + s);
+        x.lineTo(m.x - s * 0.28, m.y + s * 0.28);
+        x.lineTo(m.x - s, m.y);
+        x.lineTo(m.x - s * 0.28, m.y - s * 0.28);
+        x.closePath();
+        x.fill();
+      } else {
+        x.fillStyle = '#fff9ea';
+        x.beginPath();
+        x.arc(m.x, m.y, m.r * 0.72, 0, Math.PI * 2);
+        x.fill();
+      }
+      x.restore();
     }
-    x.globalAlpha = 1;
   }
 
   function showScreen(name) {
@@ -203,6 +298,8 @@ G.UI = (function () {
     });
 
     // Action buttons
+    const avatarBtn = $('#hud-avatar');
+    if (avatarBtn) avatarBtn.addEventListener('click', () => { G.Audio.play('tap'); openRelicsModal(); });
     $('#act-explore').addEventListener('click', () => { G.Audio.play('tap'); G.Game.autoExplore(); });
     $('#act-wait').addEventListener('click', () => { G.Audio.play('tap'); G.Game.waitTurn(); });
     $('#act-bag').addEventListener('click', () => { G.Audio.play('tap'); openBagModal(); });
@@ -307,6 +404,12 @@ G.UI = (function () {
     const pl = st.player;
     const biome = G.biomeFor(st.floor);
 
+    const avatarImg = $('#hud-avatar-img');
+    if (avatarImg) {
+      const pUrl = classPortraitURL(st.cls);
+      if (avatarImg.getAttribute('src') !== pUrl) avatarImg.src = pUrl;
+    }
+
     $('#hud-floor').textContent = `B${st.floor}F`;
     $('#hud-biome').textContent = biome.name;
     $('#hud-gold').textContent = pl.gold;
@@ -340,7 +443,12 @@ G.UI = (function () {
     const boss = st.monsters.find((m) => m.boss && m.hp > 0 && !m.asleep);
     const bossBar = $('#boss-bar');
     if (boss) {
-      bossBar.style.display = 'block';
+      bossBar.style.display = 'flex';
+      const bImg = $('#boss-portrait-img');
+      if (bImg) {
+        const bUrl = bossPortraitURL(boss.type);
+        if (bImg.getAttribute('src') !== bUrl) bImg.src = bUrl;
+      }
       $('#boss-name').textContent = boss.name + (boss.phase2 ? '【激怒】' : '');
       $('#boss-hp-fill').style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
       $('#boss-hp-val').textContent = `${boss.hp}/${boss.maxHp}`;
@@ -388,7 +496,7 @@ G.UI = (function () {
       const stars = '★'.repeat(sp.lv + 1) + '☆'.repeat(2 - sp.lv);
       btn.innerHTML = `
         <span class="mp-badge">${cost}</span>
-        <img src="${G.Spr.iconURL(sp.id)}" alt="" class="pixel-img">
+        <img src="${G.Spr.iconURL(sp.id)}" alt="">
         <span class="sp-name">${def.name}</span>
         <span class="sp-stars">${stars}</span>
       `;
@@ -414,7 +522,6 @@ G.UI = (function () {
   /* ---------- Modals ---------- */
   function openModal(title, bodyNode, opts = {}) {
     const back = $('#modal-backdrop');
-    const card = $('#modal-card');
     $('#modal-title').textContent = title;
     const body = $('#modal-body');
     body.innerHTML = '';
@@ -425,7 +532,7 @@ G.UI = (function () {
     closeBtn.onclick = closeModal;
     activeModal = { dismissible, onClose: opts.onClose };
     back.classList.add('open');
-    card.scrollTop = 0;
+    body.scrollTop = 0;
   }
 
   function closeModal() {
@@ -447,12 +554,17 @@ G.UI = (function () {
     for (const id of G.CLASS_ORDER) {
       const C = G.CLASSES[id];
       const unlocked = meta.unlocked.includes(id);
-      const spImg = G.Spr.spriteURL(G.Spr.playerSprite(id), 4);
+      const spImg = G.Spr.spriteURL(G.Spr.playerSprite(id));
+      const pImg = classPortraitURL(id);
       const card = el('div', 'fantasy-card class-card' + (unlocked ? '' : ' locked'));
       const spellTags = C.spells.map((sid) => `<span class="tag">${G.SPELLS[sid].name}</span>`).join('');
       card.innerHTML = `
         <div class="cc-top">
-          <img src="${spImg}" class="pixel-img cc-sprite" alt="">
+          <div class="cc-portrait-wrap">
+            <img src="${pImg}" class="cc-portrait" alt="${C.name}">
+            <img src="${spImg}" class="cc-mini-sprite" alt="">
+            ${unlocked ? '' : '<span class="cc-lock-badge">🔒</span>'}
+          </div>
           <div class="cc-info">
             <div class="cc-name">${C.name} <small>${C.en}</small></div>
             <div class="cc-stats">HP ${C.hp} / MP ${C.mp} / 魔力 ${C.pow} / 防御 ${C.def}</div>
@@ -539,7 +651,7 @@ G.UI = (function () {
       const B = G.BOONS[id];
       const card = el('button', 'fantasy-card boon-card');
       card.innerHTML = `
-        <img src="${G.Spr.iconURL(B.icon)}" class="pixel-img boon-icon" alt="">
+        <img src="${G.Spr.iconURL(B.icon)}" class="boon-icon" alt="">
         <div class="boon-text">
           <div class="boon-name">${B.name}</div>
           <div class="boon-desc">${B.desc}</div>
@@ -570,7 +682,7 @@ G.UI = (function () {
           : def.desc;
         const row = el('div', 'fantasy-card item-row');
         row.innerHTML = `
-          <img src="${G.Spr.iconURL(def.icon)}" class="pixel-img item-icon" alt="">
+          <img src="${G.Spr.iconURL(def.icon)}" class="item-icon" alt="">
           <div class="item-info">
             <div class="item-name">${def.name}${it.spell ? `〈${G.SPELLS[it.spell].name}〉` : ''}</div>
             <div class="item-desc">${desc}</div>
@@ -608,7 +720,7 @@ G.UI = (function () {
       const def = G.SPELLS[sp.id];
       const card = el('button', 'fantasy-card boon-card');
       card.innerHTML = `
-        <img src="${G.Spr.iconURL(sp.id)}" class="pixel-img boon-icon" alt="">
+        <img src="${G.Spr.iconURL(sp.id)}" class="boon-icon" alt="">
         <div class="boon-text">
           <div class="boon-name">${def.name} (Lv.${sp.lv + 1})</div>
           <div class="boon-desc">${def.desc(sp.lv, def)}</div>
@@ -630,7 +742,14 @@ G.UI = (function () {
   function openShrineModal(obj) {
     const st = G.Game.state;
     const wrap = el('div', 'boon-list');
-    wrap.appendChild(el('p', 'modal-lead', `古代の祭壇が静かに輝いている。（所持金貨: ${st.player.gold}G）`));
+    const banner = el('div', 'scene-banner', `
+      ${shrineBannerSVG()}
+      <div class="scene-banner-cap">
+        <span>古代の祭壇が静かに輝いている</span>
+        <span class="hud-gold">金貨 <strong>${st.player.gold}G</strong></span>
+      </div>
+    `);
+    wrap.appendChild(banner);
     obj.offers.forEach((off, i) => {
       const def = G.SHRINES.find((s) => s.id === off.id);
       const card = el('button', 'fantasy-card boon-card');
@@ -653,16 +772,25 @@ G.UI = (function () {
   function openMerchantModal(obj) {
     const st = G.Game.state;
     const wrap = el('div', 'bag-wrap');
-    wrap.appendChild(el('div', 'dust-banner', `旅の行商人「いい品があるぞ」 — 所持金貨: <strong>${st.player.gold}G</strong>`));
+    const banner = el('div', 'scene-banner', `
+      <img src="./assets/portraits/scene_merchant.webp" alt="旅の行商人">
+      <div class="scene-banner-cap">
+        <span>旅の行商人「いい品があるぞ」</span>
+        <span class="hud-gold">金貨 <strong>${st.player.gold}G</strong></span>
+      </div>
+    `);
+    wrap.appendChild(banner);
+    let remaining = 0;
     obj.stock.forEach((entry, i) => {
       if (entry.sold) return;
+      remaining++;
       const isRelic = !!entry.relic;
       const name = isRelic ? `【遺物】${G.RELICS[entry.relic].name}` : G.ITEMS[entry.item.id].name + (entry.item.spell ? `〈${G.SPELLS[entry.item.spell].name}〉` : '');
       const desc = isRelic ? G.RELICS[entry.relic].desc : (entry.item.spell ? G.SPELLS[entry.item.spell].desc(0, G.SPELLS[entry.item.spell]) : G.ITEMS[entry.item.id].desc);
       const iconKey = isRelic ? G.RELICS[entry.relic].icon : G.ITEMS[entry.item.id].icon;
       const row = el('div', 'fantasy-card item-row');
       row.innerHTML = `
-        <img src="${G.Spr.iconURL(iconKey)}" class="pixel-img item-icon" alt="">
+        <img src="${G.Spr.iconURL(iconKey)}" class="item-icon" alt="">
         <div class="item-info">
           <div class="item-name">${name}</div>
           <div class="item-desc">${desc}</div>
@@ -677,6 +805,9 @@ G.UI = (function () {
       row.appendChild(btn);
       wrap.appendChild(row);
     });
+    if (remaining === 0) {
+      wrap.appendChild(el('p', 'modal-lead', '「ふむ、これで品物は全部だ。また地下のどこかで会おう！」'));
+    }
     openModal('旅の行商人', wrap);
   }
 
@@ -687,10 +818,14 @@ G.UI = (function () {
     const pl = st.player;
     const C = G.CLASSES[st.cls];
     const wrap = el('div', 'bag-wrap');
-    wrap.appendChild(el('div', 'fantasy-card', `
-      <div class="item-name">${C.name} Lv.${pl.lvl}</div>
-      <div class="item-desc">${C.passive}</div>
-      <div class="cc-stats" style="margin-top:6px">HP ${pl.hp}/${pl.maxHp} ・ MP ${pl.mp}/${pl.maxMp} ・ 魔力 ${pl.pow} ・ 防御 ${pl.def}</div>
+    wrap.appendChild(el('div', 'fantasy-card status-hero', `
+      <img src="${classPortraitURL(st.cls)}" class="status-portrait" alt="${C.name}">
+      <div class="item-info">
+        <div class="item-name">${C.name} Lv.${pl.lvl}</div>
+        <div class="cc-stats" style="margin-top:3px">HP ${pl.hp}/${pl.maxHp} ・ MP ${pl.mp}/${pl.maxMp}</div>
+        <div class="cc-stats">魔力 ${pl.pow} ・ 防御 ${pl.def} ・ 討伐 ${st.kills}</div>
+        <div class="item-desc" style="margin-top:4px;color:var(--gold)">${C.passive}</div>
+      </div>
     `));
     if (!pl.relics.length) {
       wrap.appendChild(el('p', 'modal-lead', 'まだ遺物を所持していない。宝箱やボスから手に入れよう。'));
@@ -699,7 +834,7 @@ G.UI = (function () {
         const R = G.RELICS[id];
         const row = el('div', 'fantasy-card item-row');
         row.innerHTML = `
-          <img src="${G.Spr.iconURL(R.icon)}" class="pixel-img item-icon" alt="">
+          <img src="${G.Spr.iconURL(R.icon)}" class="item-icon" alt="">
           <div class="item-info">
             <div class="item-name">${R.name}</div>
             <div class="item-desc">${R.desc}</div>
@@ -717,7 +852,7 @@ G.UI = (function () {
     const wrap = el('div', 'bag-wrap');
     wrap.appendChild(el('div', 'fantasy-card', `
       <div style="display:flex;gap:12px;align-items:center">
-        <img src="${G.Spr.iconURL(sp.id)}" class="pixel-img item-icon" alt="">
+        <img src="${G.Spr.iconURL(sp.id)}" class="item-icon" alt="">
         <div>
           <div class="item-name">${def.name} (Lv.${sp.lv + 1}/3)</div>
           <div class="cc-stats">属性: ${G.ELEM[def.elem].name} / 消費MP: ${cost}</div>
@@ -740,17 +875,26 @@ G.UI = (function () {
         else if (v > 1) resList.push(`${ename}:弱点`);
       }
     }
+    const states = [];
+    if (m.asleep) states.push('睡眠中');
+    if (m.frozen > 0) states.push(`凍結(${m.frozen})`);
+    if ((m.chill || 0) > 0) states.push(`冷気(${m.chill})`);
+    if (m.burn > 0) states.push(`燃焼(${m.burn})`);
+    if (m.poison > 0) states.push(`毒(${m.poison})`);
+    const imgHtml = m.boss
+      ? `<img src="${bossPortraitURL(m.type)}" class="monster-portrait" alt="${m.name}">`
+      : `<img src="${G.Spr.spriteURL(sp)}" class="item-icon" style="width:54px;height:54px" alt="">`;
     const wrap = el('div', 'bag-wrap');
     wrap.appendChild(el('div', 'fantasy-card', `
       <div style="display:flex;gap:12px;align-items:center">
-        <img src="${G.Spr.spriteURL(sp, 4)}" class="pixel-img item-icon" alt="">
-        <div>
+        ${imgHtml}
+        <div class="item-info">
           <div class="item-name">${m.name}${m.boss ? ' ★BOSS' : ''}</div>
           <div class="cc-stats">HP ${m.hp}/${m.maxHp} ・ 攻撃 ${m.atk[0]}-${m.atk[1]} ・ 防御 ${m.def}</div>
         </div>
       </div>
       <div class="item-desc" style="margin-top:8px">
-        状態: ${m.asleep ? '睡眠中 ' : ''}${m.frozen > 0 ? '凍結 ' : ''}${m.burn > 0 ? '燃焼 ' : ''}${m.poison > 0 ? '毒 ' : ''}${(!m.asleep && !m.frozen && !m.burn && !m.poison) ? '通常' : ''}
+        状態: ${states.length ? states.join(' / ') : '通常'}
         ${resList.length ? '<br>属性相性: ' + resList.join(' / ') : ''}
       </div>
     `));
@@ -848,7 +992,7 @@ G.UI = (function () {
         for (const id of G.SPELL_POOL) {
           const S = G.SPELLS[id];
           content.appendChild(el('div', 'fantasy-card item-row', `
-            <img src="${G.Spr.iconURL(id)}" class="pixel-img item-icon" alt="">
+            <img src="${G.Spr.iconURL(id)}" class="item-icon" alt="">
             <div class="item-info"><div class="item-name">${S.name} (${G.ELEM[S.elem].name} / MP${S.cost[0]})</div>
             <div class="item-desc">${S.desc(0, S)}</div></div>
           `));
@@ -857,7 +1001,7 @@ G.UI = (function () {
         for (const id of Object.keys(G.RELICS)) {
           const R = G.RELICS[id];
           content.appendChild(el('div', 'fantasy-card item-row', `
-            <img src="${G.Spr.iconURL(R.icon)}" class="pixel-img item-icon" alt="">
+            <img src="${G.Spr.iconURL(R.icon)}" class="item-icon" alt="">
             <div class="item-info"><div class="item-name">${R.name}</div>
             <div class="item-desc">${R.desc}</div></div>
           `));
@@ -867,8 +1011,11 @@ G.UI = (function () {
           const M = G.MONSTERS[id];
           if (M.ally) continue;
           const sp = G.Spr.s[M.sprite];
+          const imgHtml = M.boss
+            ? `<img src="${bossPortraitURL(id)}" class="codex-boss-portrait" alt="${M.name}">`
+            : `<img src="${G.Spr.spriteURL(sp)}" class="item-icon" alt="">`;
           content.appendChild(el('div', 'fantasy-card item-row', `
-            <img src="${G.Spr.spriteURL(sp, 3)}" class="pixel-img item-icon" alt="">
+            ${imgHtml}
             <div class="item-info"><div class="item-name">${M.name}${M.boss ? ' ★BOSS' : ''}</div>
             <div class="item-desc">HP ${M.hp} / 攻撃 ${M.atk[0]}-${M.atk[1]} / 防御 ${M.def}</div></div>
           `));
@@ -881,6 +1028,8 @@ G.UI = (function () {
         tabs.querySelectorAll('button').forEach((x) => x.className = 'btn btn-sm btn-outline');
         b.className = 'btn btn-sm btn-gold';
         showTab(k);
+        const mb = $('#modal-body');
+        if (mb) mb.scrollTop = 0;
       };
       tabs.appendChild(b);
     });
@@ -896,6 +1045,7 @@ G.UI = (function () {
     const wrap = el('div', 'bag-wrap end-wrap');
     wrap.innerHTML = `
       <div class="end-hero ${ev.victory ? 'win' : 'lose'}">
+        <img src="${classPortraitURL(st.cls)}" class="end-portrait" alt="${G.CLASSES[st.cls].name}">
         <div class="end-title">${ev.victory ? '★ 迷宮制覇 ★' : '力尽きた…'}</div>
         <div class="end-sub">${ev.victory ? '星喰らいの魔王を討ち果たし、迷宮に光を取り戻した！' : `${ev.cause} の前に倒れた。`}</div>
       </div>

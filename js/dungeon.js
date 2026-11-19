@@ -305,9 +305,11 @@ G.Dungeon = {};
     }
     // traps
     if (floor >= 2) {
-      const nT = rng.int(2, 3 + Math.floor(floor / 3));
+      const nT = rng.int(1, 2 + Math.floor(floor / 3));
       for (let i = 0; i < nT; i++) {
-        const p = freeFloor(m, rng, occ, (x, y) => reach(x, y) && G.dist(x, y, start.x, start.y) > 4);
+        const p = freeFloor(m, rng, occ, (x, y) =>
+          reach(x, y) && G.dist(x, y, start.x, start.y) > 4 && G.dist(x, y, stairs.x, stairs.y) > 2
+        );
         if (!p) continue;
         occ.add(p.y * m.w + p.x);
         objects.push({ type: 'trap', x: p.x, y: p.y, kind: rng.pick(['spike', 'spike', 'fire', 'alarm', 'teleport', 'poison']), hidden: true });
@@ -322,16 +324,16 @@ G.Dungeon = {};
     const nGold = rng.int(3, 6);
     for (let i = 0; i < nGold; i++) {
       const p = freeFloor(m, rng, occ, reach);
-      if (p) { occ.add(p.y * m.w + p.x); items.push({ x: p.x, y: p.y, gold: rng.int(4, 10) + floor * 3 }); }
+      if (p) { occ.add(p.y * m.w + p.x); items.push({ x: p.x, y: p.y, gold: rng.int(5, 11) + floor * 3 }); }
     }
     // monsters
-    const nMon = Math.round(6 + floor * 0.9 + rng.int(0, 3));
+    const nMon = Math.round(6 + floor * 0.85 + rng.int(0, 3));
     for (let i = 0; i < nMon; i++) {
       const p = freeFloor(m, rng, occ, (x, y) => reach(x, y) && G.dist(x, y, start.x, start.y) > 7);
       if (!p) continue;
       occ.add(p.y * m.w + p.x);
       const type = pickMonster(rng, biome, floor);
-      spawns.push({ type, x: p.x, y: p.y, asleep: rng.chance(0.55), elite: rng.chance(0.06 + floor * 0.012) });
+      spawns.push({ type, x: p.x, y: p.y, asleep: rng.chance(0.55), elite: rng.chance(0.06 + floor * 0.01) });
       // packs
       if ((type === 'rat' || type === 'bat' || type === 'hound' || type === 'slime') && rng.chance(0.45)) {
         for (const [dx, dy] of rng.shuffle(G.DIRS8.slice()).slice(0, rng.int(1, 2))) {
@@ -349,7 +351,7 @@ G.Dungeon = {};
     while (offers.length < 2 && pool.length) {
       const s = rng.weighted(pool, (o) => o.w);
       pool.splice(pool.indexOf(s), 1);
-      offers.push({ id: s.id, cost: 30 + floor * 12 });
+      offers.push({ id: s.id, cost: 24 + floor * 8 });
     }
     return { type: 'shrine', x: p.x, y: p.y, used: false, offers };
   }
@@ -357,7 +359,7 @@ G.Dungeon = {};
 
   function makeMerchant(rng, floor, p, ctx) {
     const stock = [];
-    const scale = 1 + floor * 0.08;
+    const scale = 1 + floor * 0.06;
     stock.push({ item: { id: 'hpPotion' }, price: Math.round(G.ITEMS.hpPotion.price * scale) });
     stock.push({ item: { id: 'mpPotion' }, price: Math.round(G.ITEMS.mpPotion.price * scale) });
     for (let i = 0; i < 2; i++) {
@@ -367,7 +369,7 @@ G.Dungeon = {};
     const t = { id: 'tome', spell: rng.weighted(G.SPELL_POOL, (s) => G.SPELL_RARITY[s]) };
     stock.push({ item: t, price: Math.round(G.ITEMS.tome.price * scale) });
     const relic = G.Dungeon.randomRelic(rng, (ctx && ctx.relics) || []);
-    if (relic) stock.push({ relic, price: Math.round(110 * scale) });
+    if (relic) stock.push({ relic, price: Math.round(100 * scale) });
     return { type: 'merchant', x: p.x, y: p.y, stock };
   }
 

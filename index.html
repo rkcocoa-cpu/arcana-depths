@@ -56,6 +56,9 @@
   <!-- ================= GAME SCREEN ================= -->
   <section id="screen-game" class="screen">
     <header class="hud-top">
+      <button id="hud-avatar" type="button" class="hud-avatar" title="術士ステータス・遺物" aria-label="ステータス">
+        <img id="hud-avatar-img" alt="">
+      </button>
       <div class="hud-loc">
         <div class="hud-floor-row">
           <span id="hud-floor" class="floor-badge">B1F</span>
@@ -99,11 +102,14 @@
     </div>
 
     <div id="boss-bar">
-      <div class="boss-head">
-        <span id="boss-name">BOSS</span>
-        <span id="boss-hp-val">80/80</span>
+      <img id="boss-portrait-img" class="boss-portrait" alt="">
+      <div class="boss-info">
+        <div class="boss-head">
+          <span id="boss-name">BOSS</span>
+          <span id="boss-hp-val">80/80</span>
+        </div>
+        <div class="boss-track"><div id="boss-hp-fill" style="width:100%"></div></div>
       </div>
-      <div class="boss-track"><div id="boss-hp-fill" style="width:100%"></div></div>
     </div>
 
     <div id="canvas-wrap">

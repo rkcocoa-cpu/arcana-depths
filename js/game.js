@@ -111,7 +111,7 @@ G.Game = (function () {
         level: lv,
         vis: new Uint8Array(lv.w * lv.h),
         exp: new Uint8Array(d.exp),
-        monsters: d.monsters,
+        monsters: d.monsters.map((m) => Object.assign({ chill: 0, energy: 0 }, m)),
         clouds: d.clouds || [],
         telegraphs: d.telegraphs || [],
         log: d.log || [],
@@ -165,10 +165,19 @@ G.Game = (function () {
 
   function computeFOV() {
     const pl = state.player;
-    const r = pl.vision + (pl.relics.includes('starEye') ? 2 : 0);
+    const hasStarEye = pl.relics.includes('starEye');
+    const r = pl.vision + (hasStarEye ? 2 : 0);
     G.FOV.compute(state.level, pl.x, pl.y, r, state.vis);
     for (let i = 0; i < state.vis.length; i++) {
       if (state.vis[i]) state.exp[i] = 1;
+    }
+    if (hasStarEye && state.level.objects) {
+      for (const o of state.level.objects) {
+        if (o.type === 'trap' && o.hidden && state.vis[o.y * state.level.w + o.x] && G.dist(o.x, o.y, pl.x, pl.y) <= 4) {
+          o.hidden = false;
+          log('星見の瞳が隠された罠を見破った！', 'buff');
+        }
+      }
     }
     if (state.monsters) {
       for (const m of state.monsters) {
@@ -280,11 +289,11 @@ G.Game = (function () {
 
   function spawnMonster(s, floor) {
     const def = G.MONSTERS[s.type];
-    const scale = def.boss ? 1 : 1 + (floor - 1) * 0.085;
-    const eliteMul = s.elite ? 1.45 : 1;
+    const scale = def.boss ? 1 : 1 + (floor - 1) * 0.055;
+    const eliteMul = s.elite ? 1.4 : 1;
     const hp = Math.max(3, Math.round(def.hp * scale * eliteMul));
-    const atkMin = Math.max(1, Math.round(def.atk[0] * scale * (s.elite ? 1.2 : 1)));
-    const atkMax = Math.max(atkMin + 1, Math.round(def.atk[1] * scale * (s.elite ? 1.2 : 1)));
+    const atkMin = Math.max(1, Math.round(def.atk[0] * scale * (s.elite ? 1.18 : 1)));
+    const atkMax = Math.max(atkMin + 1, Math.round(def.atk[1] * scale * (s.elite ? 1.18 : 1)));
     return {
       uid: G.uid(),
       type: s.type,
@@ -305,7 +314,7 @@ G.Game = (function () {
       fly: !!def.fly,
       lavaWalk: !!def.lavaWalk,
       scale: def.scale || 1,
-      frozen: 0, burn: 0, poison: 0,
+      frozen: 0, chill: 0, burn: 0, poison: 0,
       dur: s.dur || 0,
       cd: 0, phase2: false,
     };
@@ -385,7 +394,7 @@ G.Game = (function () {
     } else if (elem === 'lightning') {
       if (pl.relics.includes('stormRing')) dmg *= 1.35;
     }
-    if (state.cls === 'cryo' && m.frozen > 0) dmg *= 1.4;
+    if (state.cls === 'cryo' && (m.frozen > 0 || (m.chill || 0) > 0)) dmg *= 1.35;
     if (pl.relics.includes('berserk') && pl.hp <= pl.maxHp * 0.35) dmg *= 1.5;
 
     // resistance
@@ -437,6 +446,10 @@ G.Game = (function () {
     saveMeta(meta);
 
     log(`${m.name} を倒した！`, 'hit');
+    if (state.cls === 'hemo') {
+      pl.hp = Math.min(pl.maxHp, pl.hp + 2);
+      G.FX.floatText(pl.x, pl.y, '+2', '#ff7080');
+    }
     if (pl.relics.includes('vampFang')) {
       pl.hp = Math.min(pl.maxHp, pl.hp + 3);
       G.FX.floatText(pl.x, pl.y, '+3', '#ff7080');
@@ -449,7 +462,7 @@ G.Game = (function () {
       g = Math.round(g * (1 + meta.upgrades.fortune * 0.15));
       if (g > 0) state.level.items.push({ x: m.x, y: m.y, gold: g });
     }
-    const dropChance = 0.14 + (m.elite ? 0.45 : 0) + (pl.relics.includes('luckyCoin') ? 0.08 : 0);
+    const dropChance = 0.15 + (m.elite ? 0.45 : 0) + (pl.relics.includes('luckyCoin') ? 0.08 : 0);
     if (!m.boss && state.rng.chance(dropChance)) {
       state.level.items.push({ x: m.x, y: m.y, item: G.Dungeon.randomItem(state.rng, state.floor) });
     }
@@ -478,7 +491,9 @@ G.Game = (function () {
   function damagePlayer(rawDmg, sourceName, elem = 'phys') {
     const pl = state.player;
     if (state.over) return 0;
-    let dmg = elem === 'phys' ? Math.max(1, rawDmg - pl.def) : Math.max(1, rawDmg);
+    const isDot = sourceName === '火傷' || sourceName === '毒';
+    const defMit = isDot ? 0 : (elem === 'phys' ? pl.def : Math.floor(pl.def * 0.4));
+    let dmg = Math.max(1, rawDmg - defMit);
 
     // Shield absorption
     if (pl.shield > 0) {
@@ -525,7 +540,7 @@ G.Game = (function () {
     clearRunSave();
     G.Audio.stopBgm();
     G.Audio.play('die');
-    const dust = Math.max(2, Math.floor(state.floor * 4 + state.kills * 0.5));
+    const dust = Math.max(4, Math.floor(state.floor * 5 + state.kills * 0.6));
     const meta = loadMeta();
     meta.dust += dust;
     saveMeta(meta);
@@ -540,7 +555,7 @@ G.Game = (function () {
     clearRunSave();
     G.Audio.stopBgm();
     G.Audio.play('win');
-    const dust = 60 + state.floor * 5 + Math.floor(state.kills * 0.8);
+    const dust = 70 + state.floor * 6 + Math.floor(state.kills * 0.8);
     const meta = loadMeta();
     meta.dust += dust;
     meta.stats.wins++;
@@ -674,7 +689,10 @@ G.Game = (function () {
         continue;
       }
 
-      m.energy += (m.spd * cost) / 100;
+      const spdMul = (m.chill || 0) > 0 ? 0.8 : 1;
+      if (m.chill > 0) m.chill--;
+
+      m.energy += (m.spd * spdMul * cost) / 100;
       let safety = 0;
       while (m.energy >= 100 && m.hp > 0 && !state.over && safety++ < 4) {
         m.energy -= 100;
@@ -785,8 +803,8 @@ G.Game = (function () {
         G.FX.elemBurst(pl.x, pl.y, r.elem);
       });
       damagePlayer(dmg, m.name, r.elem);
-      if (r.freeze && state.rng.chance(r.freeze)) { log('冷気で動きが鈍った！', 'bad'); }
-      if (r.burn && state.rng.chance(r.burn)) { pl.burn = Math.max(pl.burn, 3); log('炎に包まれ燃焼した！', 'bad'); }
+      if (r.chill && state.rng.chance(r.chill)) { log('冷気を浴びた！', 'bad'); }
+      if (r.burn && state.rng.chance(r.burn)) { pl.burn = Math.max(pl.burn, 2); log('炎に包まれ燃焼した！', 'bad'); }
       return;
     }
 
@@ -846,7 +864,36 @@ G.Game = (function () {
       }
     }
     if (pl.relics.includes('thornCloak')) {
-      damageMonster(m, 4, 'phys');
+      damageMonster(m, 5, 'phys');
+    }
+  }
+
+  function addTelegraph(tx, ty, dmg, elem, name) {
+    if (!isWalkable(tx, ty)) return false;
+    if (state.telegraphs.some((t) => t.x === tx && t.y === ty)) return false;
+    state.telegraphs.push({ x: tx, y: ty, turns: 1, dmg, elem, name });
+    return true;
+  }
+
+  function addScatteredTelegraphs(pl, lv, count, dmg, elem, name) {
+    // Always leave at least 2 adjacent walkable tiles around player clear so dodging is fair
+    const adjWalkable = G.DIRS8.map(([dx, dy]) => [pl.x + dx, pl.y + dy]).filter(([x, y]) => isWalkable(x, y));
+    state.rng.shuffle(adjWalkable);
+    const protectedSet = new Set(adjWalkable.slice(0, 2).map(([x, y]) => `${x},${y}`));
+
+    addTelegraph(pl.x, pl.y, dmg, elem, name);
+    const pool = [];
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const tx = G.clamp(pl.x + dx, 1, lv.w - 2);
+      const ty = G.clamp(pl.y + dy, 1, lv.h - 2);
+      if (!protectedSet.has(`${tx},${ty}`) && isWalkable(tx, ty)) pool.push([tx, ty]);
+    }
+    state.rng.shuffle(pool);
+    let placed = 1;
+    for (const [tx, ty] of pool) {
+      if (placed >= count) break;
+      if (addTelegraph(tx, ty, dmg, elem, name)) placed++;
     }
   }
 
@@ -857,7 +904,7 @@ G.Game = (function () {
 
     if (m.type === 'boneking') {
       const minions = state.monsters.filter((e) => !e.boss && !e.ally && e.hp > 0).length;
-      if (minions < 3 && state.rng.chance(0.55)) {
+      if (minions < 2 && state.rng.chance(0.5)) {
         let spawned = 0;
         for (const [dx, dy] of state.rng.shuffle(G.DIRS8.slice())) {
           const nx = m.x + dx, ny = m.y + dy;
@@ -874,19 +921,18 @@ G.Game = (function () {
           return true;
         }
       }
-      // Telegraph bone nova around player
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const tx = pl.x + dx, ty = pl.y + dy;
-        if (isWalkable(tx, ty)) state.telegraphs.push({ x: tx, y: ty, turns: 1, dmg: 8, elem: 'dark', name: m.name + 'の呪骨波' });
+      // Telegraph Dodgeable Cross (+) bone eruption around player
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        addTelegraph(pl.x + dx, pl.y + dy, 7, 'dark', m.name + 'の呪骨波');
       }
       m.cd = cdBase;
-      log('骸骨王が呪いの骨を隆起させようとしている！', 'warn');
+      log('骸骨王が十字に呪いの骨を隆起させようとしている！', 'warn');
       return true;
     }
 
     if (m.type === 'colossus') {
       const minions = state.monsters.filter((e) => !e.boss && !e.ally && e.hp > 0).length;
-      if (minions < 2 && state.rng.chance(0.5)) {
+      if (minions < 2 && state.rng.chance(0.48)) {
         for (const [dx, dy] of state.rng.shuffle(G.DIRS8.slice())) {
           const nx = m.x + dx, ny = m.y + dy;
           if (isWalkable(nx, ny) && !monsterAt(nx, ny) && !(nx === pl.x && ny === pl.y)) {
@@ -898,27 +944,30 @@ G.Game = (function () {
           }
         }
       }
-      // Cross laser telegraph
-      for (const [dx, dy] of G.DIRS4) {
-        for (let k = 1; k <= 6; k++) {
-          const tx = m.x + dx * k, ty = m.y + dy * k;
-          if (tx < 0 || ty < 0 || tx >= lv.w || ty >= lv.h || G.TILE_OPAQUE[lv.tiles[ty * lv.w + tx]]) break;
-          state.telegraphs.push({ x: tx, y: ty, turns: 1, dmg: 11, elem: 'ice', name: '晶核光線' });
+      // Telegraph either Cross laser (when aligned) or diagonal X crystal eruption around player
+      const aligned = pl.x === m.x || pl.y === m.y;
+      if (aligned) {
+        for (const [dx, dy] of G.DIRS4) {
+          for (let k = 1; k <= 6; k++) {
+            const tx = m.x + dx * k, ty = m.y + dy * k;
+            if (tx < 0 || ty < 0 || tx >= lv.w || ty >= lv.h || G.TILE_OPAQUE[lv.tiles[ty * lv.w + tx]]) break;
+            addTelegraph(tx, ty, 10, 'ice', '晶核光線');
+          }
         }
+        log('晶核の巨像のコアが十字に輝き始めた！', 'warn');
+      } else {
+        for (const [dx, dy] of [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+          addTelegraph(pl.x + dx, pl.y + dy, 10, 'ice', '晶核閃裂');
+        }
+        log('晶核の巨像が周囲に氷晶を炸裂させようとしている！', 'warn');
       }
       m.cd = cdBase;
-      log('晶核の巨像のコアが十字に輝き始めた！', 'warn');
       return true;
     }
 
     if (m.type === 'ignis') {
-      // Meteor shower telegraphs near player
-      const count = m.phase2 ? 6 : 4;
-      for (let i = 0; i < count; i++) {
-        const tx = G.clamp(pl.x + state.rng.int(-2, 2), 1, lv.w - 2);
-        const ty = G.clamp(pl.y + state.rng.int(-2, 2), 1, lv.h - 2);
-        if (isWalkable(tx, ty)) state.telegraphs.push({ x: tx, y: ty, turns: 1, dmg: 13, elem: 'fire', name: 'イグニスの業火' });
-      }
+      const count = m.phase2 ? 5 : 4;
+      addScatteredTelegraphs(pl, lv, count, 12, 'fire', 'イグニスの業火');
       m.cd = cdBase - 1;
       log('炎竜イグニスが天を仰ぎ、紅蓮の火球を呼び寄せた！', 'warn');
       G.Audio.play('boss');
@@ -927,7 +976,6 @@ G.Game = (function () {
 
     if (m.type === 'voidlord') {
       if (state.rng.chance(0.45)) {
-        // Void blink + summon
         const spots = [];
         for (let y = 5; y < 20; y++) for (let x = 7; x < 26; x++) {
           if (isWalkable(x, y) && !monsterAt(x, y) && G.dist(x, y, pl.x, pl.y) >= 4) spots.push([x, y]);
@@ -939,12 +987,8 @@ G.Game = (function () {
           G.FX.burst(nx + 0.5, ny + 0.5, '#b9a8ff', 14, 3, 0.4);
         }
       }
-      const n = m.phase2 ? 8 : 5;
-      for (let i = 0; i < n; i++) {
-        const tx = G.clamp(pl.x + state.rng.int(-2, 2), 1, lv.w - 2);
-        const ty = G.clamp(pl.y + state.rng.int(-2, 2), 1, lv.h - 2);
-        if (isWalkable(tx, ty)) state.telegraphs.push({ x: tx, y: ty, turns: 1, dmg: 15, elem: 'dark', name: '星喰らいの崩壊' });
-      }
+      const n = m.phase2 ? 6 : 5;
+      addScatteredTelegraphs(pl, lv, n, 14, 'dark', '星喰らいの崩壊');
       m.cd = cdBase - 1;
       log('魔王ネザルが虚空の裂け目を展開した！', 'warn');
       G.Audio.play('boss');
@@ -1049,8 +1093,8 @@ G.Game = (function () {
     const pl = state.player;
     pl.flip = m.x < pl.x ? true : m.x > pl.x ? false : pl.flip;
     pl.hop = 0.7;
-    const base = state.rng.int(2, 4) + Math.floor(pl.lvl * 0.65) + Math.floor(pl.pow * 0.5);
-    const crit = state.rng.chance(0.12);
+    const base = state.rng.int(3, 5) + Math.floor(pl.lvl * 0.85) + Math.floor(pl.pow * 0.8);
+    const crit = state.rng.chance(0.15);
     const dmg = crit ? Math.round(base * 1.6) : base;
     G.Audio.play(crit ? 'crit' : 'hit');
     G.FX.addHitStop(crit ? 0.05 : 0.025);
@@ -1095,14 +1139,14 @@ G.Game = (function () {
     G.Audio.play('trap');
     if (trap.kind === 'spike') {
       log('トゲの罠が作動した！', 'bad');
-      damagePlayer(3 + state.floor, 'トゲの罠', 'phys');
+      damagePlayer(3 + Math.floor(state.floor * 0.65), 'トゲの罠', 'phys');
     } else if (trap.kind === 'fire') {
       log('炎の罠が作動した！', 'bad');
-      pl.burn = Math.max(pl.burn, 3);
-      damagePlayer(3 + Math.floor(state.floor * 0.7), '炎の罠', 'fire');
+      pl.burn = Math.max(pl.burn, 2);
+      damagePlayer(2 + Math.floor(state.floor * 0.5), '炎の罠', 'fire');
     } else if (trap.kind === 'poison') {
       log('毒ガスの罠が作動した！', 'bad');
-      pl.poison = Math.max(pl.poison, 4);
+      pl.poison = Math.max(pl.poison, 3);
       G.FX.elemBurst(pl.x, pl.y, 'poison');
     } else if (trap.kind === 'alarm') {
       log('警報の罠が鳴り響き、周囲の魔物が目を覚ました！', 'warn');
@@ -1236,34 +1280,53 @@ G.Game = (function () {
     if (!sp) return false;
     const id = sp.id, lv = sp.lv;
     const def = G.SPELLS[id];
-    const powBonus = pl.pow * 1.4;
+    const powBonus = Math.round(pl.pow * (def.powScale ?? 1.4));
 
-    if (!freeEcho) {
-      if (!canAffordSpell(id, lv)) return false;
-      paySpellCost(id, lv);
+    if (!freeEcho && !canAffordSpell(id, lv)) return false;
+
+    // Validate targets BEFORE paying MP / HP (important for Hemomancer!)
+    let preEnemies = null;
+    let preSpot = null;
+    if (id === 'missile') {
+      preEnemies = state.monsters
+        .filter((m) => m.hp > 0 && !m.ally && state.vis[m.y * state.level.w + m.x] && G.dist(pl.x, pl.y, m.x, m.y) <= def.range)
+        .sort((a, b) => G.dist(pl.x, pl.y, a.x, a.y) - G.dist(pl.x, pl.y, b.x, b.y));
+      if (!preEnemies.length) {
+        if (!freeEcho) {
+          log('視界内に魔力の矢の標的がいない！', 'sys');
+          emitUI();
+        }
+        return false;
+      }
+    } else if (id === 'blink') {
+      if (!target || !isWalkable(target.x, target.y) || monsterAt(target.x, target.y) || !state.vis[target.y * state.level.w + target.x]) {
+        log('その場所へは瞬間移動できない！', 'warn');
+        emitUI();
+        return false;
+      }
+    } else if (id === 'summon') {
+      preSpot = G.DIRS8.map(([dx, dy]) => [pl.x + dx, pl.y + dy]).find(([x, y]) => isWalkable(x, y, true) && !monsterAt(x, y));
+      if (!preSpot) {
+        log('星霊を呼び出す空き場所がない！', 'warn');
+        emitUI();
+        return false;
+      }
     }
+
+    if (!freeEcho) paySpellCost(id, lv);
 
     state.targeting = null;
     G.Audio.play('spell', def.elem);
     const col = (G.ELEM[def.elem] && G.ELEM[def.elem].color) || '#ffd27a';
-    const roll = (arr) => state.rng.range(arr) + Math.round(powBonus);
+    const roll = (arr) => state.rng.range(arr) + powBonus;
     let offensive = false;
 
     if (id === 'missile') {
-      const enemies = state.monsters
-        .filter((m) => m.hp > 0 && !m.ally && state.vis[m.y * state.level.w + m.x] && G.dist(pl.x, pl.y, m.x, m.y) <= def.range)
-        .sort((a, b) => G.dist(pl.x, pl.y, a.x, a.y) - G.dist(pl.x, pl.y, b.x, b.y));
-      if (!enemies.length) {
-        log('視界内に魔力の矢の標的がいない！', 'sys');
-        if (!freeEcho) pl.mp = Math.min(pl.maxMp, pl.mp + actualSpellCost(id, lv));
-        emitUI();
-        return false;
-      }
       offensive = true;
       const count = def.n[lv];
       log(`魔力の矢を ${count} 本放った！`, 'spell');
       for (let i = 0; i < count; i++) {
-        const m = enemies[i % enemies.length];
+        const m = preEnemies[i % preEnemies.length];
         const d = roll(def.dmg[lv]);
         G.FX.proj(pl.x + 0.5, pl.y + 0.5, m.x + 0.5, m.y + 0.5, col, 24);
         damageMonster(m, d, 'arcane');
@@ -1294,6 +1357,7 @@ G.Game = (function () {
         if (id === 'iceshard' && m.hp > 0) {
           const fr = def.freeze[lv] + (pl.relics.includes('frostHeart') ? 1 : 0);
           m.frozen = Math.max(m.frozen, fr);
+          if (def.chill) m.chill = Math.max(m.chill || 0, def.chill);
         }
         if (id === 'drain' && dealt > 0) {
           const heal = Math.max(1, Math.round(dealt * def.heal[lv]));
@@ -1304,7 +1368,7 @@ G.Game = (function () {
       if (id === 'firebolt' && lv >= 2) {
         for (const [dx, dy] of G.DIRS8) {
           const sm = monsterAt(hitPos.x + dx, hitPos.y + dy);
-          if (sm && !sm.ally && !hitList.includes(sm)) damageMonster(sm, Math.round(roll(def.dmg[lv]) * 0.6), 'fire');
+          if (sm && !sm.ally && !hitList.includes(sm)) damageMonster(sm, Math.round(roll(def.dmg[lv]) * 0.65), 'fire');
         }
         G.FX.ring(hitPos.x + 0.5, hitPos.y + 0.5, 1.8, '#ff8a3a', 0.3);
       }
@@ -1329,7 +1393,7 @@ G.Game = (function () {
           G.FX.beam(prev.x + 0.5, prev.y + 0.5, cur.x + 0.5, cur.y + 0.5, '#ffe066', 2.4, 0.25, true);
           damageMonster(cur, dmg, 'lightning');
           prev = cur;
-          dmg = Math.max(2, Math.round(dmg * 0.8));
+          dmg = Math.max(2, Math.round(dmg * 0.85));
           // Find next enemy within 3 tiles
           cur = state.monsters.find((m) => m.hp > 0 && !m.ally && !hit.has(m) && G.dist(prev.x, prev.y, m.x, m.y) <= 3);
         }
@@ -1343,18 +1407,15 @@ G.Game = (function () {
       for (const m of state.monsters) {
         if (m.hp > 0 && !m.ally && G.dist(pl.x, pl.y, m.x, m.y) <= r) {
           damageMonster(m, roll(def.dmg[lv]), 'ice');
-          if (m.hp > 0) m.frozen = Math.max(m.frozen, def.freeze[lv] + (pl.relics.includes('frostHeart') ? 1 : 0));
+          if (m.hp > 0) {
+            m.frozen = Math.max(m.frozen, def.freeze[lv] + (pl.relics.includes('frostHeart') ? 1 : 0));
+            if (def.chill) m.chill = Math.max(m.chill || 0, def.chill);
+          }
           cnt++;
         }
       }
       log(`フロストノヴァが周囲を凍らせた（${cnt}体）！`, 'spell');
     } else if (id === 'blink') {
-      if (!isWalkable(target.x, target.y) || monsterAt(target.x, target.y) || !state.vis[target.y * state.level.w + target.x]) {
-        log('その場所へは瞬間移動できない！', 'warn');
-        if (!freeEcho) pl.mp = Math.min(pl.maxMp, pl.mp + actualSpellCost(id, lv));
-        emitUI();
-        return false;
-      }
       G.FX.burst(pl.x + 0.5, pl.y + 0.5, '#ffd27a', 12, 2.5, 0.35);
       pl.x = target.x; pl.y = target.y; pl.vx = target.x; pl.vy = target.y;
       G.FX.burst(pl.x + 0.5, pl.y + 0.5, '#7fe3ff', 14, 2.8, 0.4);
@@ -1388,7 +1449,7 @@ G.Game = (function () {
         const tx = target.x + dx, ty = target.y + dy;
         if (!isWalkable(tx, ty)) continue;
         G.FX.elemBurst(tx, ty, 'fire');
-        state.clouds.push({ x: tx, y: ty, kind: 'fire', dur: 4, dmg: 3 });
+        state.clouds.push({ x: tx, y: ty, kind: 'fire', dur: 4, dmg: 4 });
         const m = monsterAt(tx, ty);
         if (m && !m.ally) damageMonster(m, roll(def.dmg[lv]), 'fire', { crit: true });
       }
@@ -1396,27 +1457,24 @@ G.Game = (function () {
     } else if (id === 'venom') {
       offensive = true;
       const r = def.radius[lv];
+      const pdmg = def.pdmg[lv] + Math.floor(pl.pow * (def.powScale || 0.4));
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
         const tx = target.x + dx, ty = target.y + dy;
         if (isWalkable(tx, ty)) {
-          state.clouds.push({ x: tx, y: ty, kind: 'venom', dur: def.dur[lv], dmg: def.pdmg[lv] });
+          state.clouds.push({ x: tx, y: ty, kind: 'venom', dur: def.dur[lv], dmg: pdmg });
           G.FX.elemBurst(tx, ty, 'poison');
         }
       }
       log('濃厚な毒霧を展開した！', 'spell');
     } else if (id === 'summon') {
-      const spot = G.DIRS8.map(([dx, dy]) => [pl.x + dx, pl.y + dy]).find(([x, y]) => isWalkable(x, y, true) && !monsterAt(x, y));
-      if (!spot) {
-        log('星霊を呼び出す空き場所がない！', 'warn');
-        if (!freeEcho) pl.mp = Math.min(pl.maxMp, pl.mp + actualSpellCost(id, lv));
-        emitUI();
-        return false;
-      }
-      const wisp = spawnMonster({ type: 'wisp', x: spot[0], y: spot[1], dur: def.dur[lv] }, state.floor);
-      wisp.hp = wisp.maxHp = def.hp[lv];
-      wisp.atk = def.atk[lv].slice();
+      const wisp = spawnMonster({ type: 'wisp', x: preSpot[0], y: preSpot[1], dur: def.dur[lv] }, state.floor);
+      wisp.hp = wisp.maxHp = def.hp[lv] + pl.pow * 3;
+      wisp.atk = [
+        def.atk[lv][0] + Math.floor(pl.pow * (def.powScale || 0.6)),
+        def.atk[lv][1] + Math.floor(pl.pow * ((def.powScale || 0.6) + 0.2)),
+      ];
       state.monsters.push(wisp);
-      G.FX.ring(spot[0] + 0.5, spot[1] + 0.5, 1.3, '#ffe08a', 0.35);
+      G.FX.ring(preSpot[0] + 0.5, preSpot[1] + 0.5, 1.3, '#ffe08a', 0.35);
       log('星の精霊を召喚した！', 'buff');
     } else if (id === 'timestop') {
       pl.timestop = def.turns[lv];
@@ -1426,7 +1484,7 @@ G.Game = (function () {
     }
 
     // Echo Tome passive
-    if (!freeEcho && offensive && pl.relics.includes('echoTome') && state.rng.chance(0.2)) {
+    if (!freeEcho && !state.over && offensive && pl.relics.includes('echoTome') && state.rng.chance(0.22)) {
       log('残響の魔導書が共鳴し、呪文が再詠唱された！', 'buff');
       castSpell(slotIdx, target, true);
       return true;
@@ -1453,7 +1511,7 @@ G.Game = (function () {
       G.FX.floatText(pl.x, pl.y, `+${amt}`, '#8ff0a8', true);
       log(`回復薬を飲み、HPを ${amt} 回復した。`, 'buff');
     } else if (it.id === 'mpPotion') {
-      const amt = Math.max(10, Math.round(pl.maxMp * 0.6));
+      const amt = Math.max(12, Math.round(pl.maxMp * 0.6));
       pl.mp = Math.min(pl.maxMp, pl.mp + amt);
       G.Audio.play('potion');
       G.FX.floatText(pl.x, pl.y, `MP+${amt}`, '#7fb8ff', true);
@@ -1486,14 +1544,15 @@ G.Game = (function () {
       for (const m of state.monsters) {
         if (m.hp > 0 && !m.ally && state.vis[m.y * state.level.w + m.x]) {
           m.frozen = Math.max(m.frozen, 3);
+          m.chill = Math.max(m.chill || 0, 4);
           G.FX.elemBurst(m.x, m.y, 'ice');
         }
       }
       log('氷結の巻物が視界の敵を凍りつかせた！', 'spell');
     } else if (it.id === 'vitality') {
-      pl.maxHp += 6; pl.hp += 6;
+      pl.maxHp += 8; pl.hp += 8;
       G.Audio.play('potion');
-      log('生命の霊薬により最大HPが 6 上昇した！', 'buff');
+      log('生命の霊薬により最大HPが 8 上昇した！', 'buff');
     } else if (it.id === 'wisdom') {
       pl.maxMp += 5; pl.mp += 5; pl.pow += 1;
       G.Audio.play('potion');

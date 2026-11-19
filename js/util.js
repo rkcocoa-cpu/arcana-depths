@@ -4,8 +4,8 @@
  *  util.js : namespace, seeded RNG, helpers
  * ========================================================= */
 const G = (window.G = window.G || {});
-G.VERSION = '1.0.0';
-G.TS = 16; // base tile size in source pixels
+G.VERSION = '1.1.0';
+G.TS = 64; // base tile resolution in HD canvas pixels
 
 /* ---------- Seeded RNG (mulberry32, serialisable) ---------- */
 class RNG {

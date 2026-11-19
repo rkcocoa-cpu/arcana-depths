@@ -1,15 +1,15 @@
 'use strict';
 /* =========================================================
- *  render.js : pixel-art canvas renderer, dynamic lighting,
- *              fog-of-war, targeting overlay, minimap
+ *  render.js : HD canvas renderer, ambient occlusion, dynamic
+ *              lighting, fog-of-war, targeting overlay, minimap
  * ========================================================= */
 G.Render = (function () {
   const T = G.TILE;
   let canvas = null, ctx = null;
   let miniCanvas = null, miniCtx = null;
   let camX = 0, camY = 0, camReady = false;
-  let viewScale = 3; // pixels per world pixel (tile = 16 * viewScale)
-  let tileSize = 48;
+  let viewScale = 4.5;
+  let tileSize = 72;
   let time = 0;
 
   function init(mainCanvas, mCanvas) {
@@ -26,14 +26,11 @@ G.Render = (function () {
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    // Choose a crisp scale so ~9-11 tiles fit across mobile width
+    // Smooth responsive tile sizing (~9.2 tiles across mobile portrait)
     const cssW = rect.width || 375;
-    const desiredTilesX = cssW < 520 ? 9.5 : 13;
-    const rawTile = (cssW * dpr) / desiredTilesX;
-    // Snap to clean integer scale of 16px when close, or crisp multiple
-    const sc = Math.max(2, Math.round(rawTile / 16));
-    viewScale = sc;
-    tileSize = 16 * viewScale;
+    const desiredTilesX = cssW < 520 ? 9.2 : 12.8;
+    tileSize = Math.max(36, Math.round((cssW * dpr) / desiredTilesX));
+    viewScale = tileSize / 16;
   }
 
   function snapCamera(x, y) {
@@ -63,7 +60,7 @@ G.Render = (function () {
     const vis = state.vis;
     const exp = state.exp;
 
-    // Camera follow
+    // Smooth camera follow
     const tx = pl.vx !== undefined ? pl.vx : pl.x;
     const ty = pl.vy !== undefined ? pl.vy : pl.y;
     if (!camReady) snapCamera(tx + 0.5, ty + 0.5);
@@ -77,7 +74,8 @@ G.Render = (function () {
     const sxOff = shake > 0.1 ? (Math.random() - 0.5) * shake * viewScale * 0.7 : 0;
     const syOff = shake > 0.1 ? (Math.random() - 0.5) * shake * viewScale * 0.7 : 0;
 
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#07070c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -110,30 +108,51 @@ G.Render = (function () {
           if (lv.deco[k] === 'torch') {
             ctx.drawImage(G.Spr.s.sconce.img, px, py, ts, ts);
             if (vis[k]) {
-              // flickering flame pixels
-              const fx = px + 7 * viewScale;
-              const fy = py + (3 + ((animFrame + x) & 1)) * viewScale;
-              ctx.fillStyle = '#ff7a2a';
-              ctx.fillRect(fx - viewScale, fy, viewScale * 3, viewScale * 3);
-              ctx.fillStyle = '#ffe066';
-              ctx.fillRect(fx, fy - viewScale, viewScale, viewScale * 2);
+              const cx = px + ts * 0.5;
+              const cy = py + ts * 0.28 + Math.sin(time * 14 + x) * ts * 0.025;
+              const fg = ctx.createRadialGradient(cx, cy, ts * 0.02, cx, cy, ts * 0.24);
+              fg.addColorStop(0, '#ffffff');
+              fg.addColorStop(0.35, '#ffe066');
+              fg.addColorStop(0.75, 'rgba(255, 110, 30, 0.55)');
+              fg.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = fg;
+              ctx.beginPath();
+              ctx.arc(cx, cy, ts * 0.24, 0, Math.PI * 2);
+              ctx.fill();
             }
           }
         } else if (t === T.STAIRS) {
           ctx.drawImage(tileset.stairs, px, py, ts, ts);
-          // subtle golden shimmer on stairs
           if (vis[k]) {
-            const pulse = 0.22 + 0.14 * Math.sin(time * 3.2);
-            ctx.fillStyle = `rgba(255, 215, 110, ${pulse})`;
-            ctx.fillRect(px + 3 * viewScale, py + 3 * viewScale, ts - 6 * viewScale, ts - 6 * viewScale);
+            const pulse = 0.26 + 0.14 * Math.sin(time * 3.2);
+            const sg = ctx.createRadialGradient(px + ts / 2, py + ts / 2, ts * 0.05, px + ts / 2, py + ts / 2, ts * 0.45);
+            sg.addColorStop(0, `rgba(255, 224, 120, ${pulse})`);
+            sg.addColorStop(1, 'rgba(255, 200, 80, 0)');
+            ctx.fillStyle = sg;
+            ctx.beginPath();
+            ctx.arc(px + ts / 2, py + ts / 2, ts * 0.45, 0, Math.PI * 2);
+            ctx.fill();
           }
         } else if (t === T.WATER || t === T.LAVA || t === T.CHASM) {
           const kind = t === T.WATER ? 'water' : t === T.LAVA ? 'lava' : 'chasm';
           ctx.drawImage(G.Spr.liquid[kind][(animFrame + ((x + y) & 1)) % 4], px, py, ts, ts);
+          // Crisp recessed shore lip when tile above is solid ground
+          if (y > 0 && lv.tiles[(y - 1) * lv.w + x] !== t) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.fillRect(px, py, ts, Math.max(2, ts * 0.1));
+          }
         } else {
           ctx.drawImage(tileset.floor[v], px, py, ts, ts);
+          // Ambient occlusion cast by wall above
+          if (y > 0 && lv.tiles[(y - 1) * lv.w + x] === T.WALL) {
+            const ao = ctx.createLinearGradient(px, py, px, py + ts * 0.28);
+            ao.addColorStop(0, 'rgba(4, 5, 10, 0.44)');
+            ao.addColorStop(1, 'rgba(4, 5, 10, 0)');
+            ctx.fillStyle = ao;
+            ctx.fillRect(px, py, ts, ts * 0.28);
+          }
           if (t === T.PILLAR) {
-            ctx.drawImage(G.Spr.s.pillar.img, px, py - 2 * viewScale, ts, ts);
+            ctx.drawImage(G.Spr.s.pillar.img, px, py - ts * 0.08, ts, ts);
           }
         }
 
@@ -141,21 +160,31 @@ G.Render = (function () {
         const dk = lv.deco[k];
         if (dk && dk !== 'torch' && t === T.FLOOR) {
           if (dk === 'moss') {
-            ctx.fillStyle = 'rgba(95,148,68,0.45)';
-            ctx.fillRect(px + 2 * viewScale, py + 4 * viewScale, 4 * viewScale, 3 * viewScale);
-            ctx.fillRect(px + 8 * viewScale, py + 10 * viewScale, 5 * viewScale, 3 * viewScale);
+            ctx.fillStyle = 'rgba(95, 152, 68, 0.42)';
+            ctx.beginPath();
+            ctx.ellipse(px + ts * 0.28, py + ts * 0.35, ts * 0.16, ts * 0.10, 0.2, 0, Math.PI * 2);
+            ctx.ellipse(px + ts * 0.68, py + ts * 0.70, ts * 0.18, ts * 0.11, -0.2, 0, Math.PI * 2);
+            ctx.fill();
           } else if (dk === 'ember') {
-            ctx.fillStyle = `rgba(255,115,40,${0.4 + 0.2 * Math.sin(time * 5 + x)})`;
-            ctx.fillRect(px + 5 * viewScale, py + 7 * viewScale, 2 * viewScale, 2 * viewScale);
-            ctx.fillRect(px + 10 * viewScale, py + 11 * viewScale, 2 * viewScale, 1 * viewScale);
+            const pulse = 0.35 + 0.22 * Math.sin(time * 5 + x);
+            ctx.fillStyle = `rgba(255, 120, 40, ${pulse})`;
+            ctx.beginPath();
+            ctx.arc(px + ts * 0.36, py + ts * 0.48, ts * 0.08, 0, Math.PI * 2);
+            ctx.arc(px + ts * 0.68, py + ts * 0.72, ts * 0.06, 0, Math.PI * 2);
+            ctx.fill();
           } else if (dk === 'star' || dk === 'rune') {
-            ctx.fillStyle = dk === 'star' ? 'rgba(170,210,255,0.45)' : 'rgba(180,150,255,0.5)';
-            ctx.fillRect(px + 7 * viewScale, py + 7 * viewScale, 2 * viewScale, 2 * viewScale);
+            const cx = px + ts * 0.5, cy = py + ts * 0.5;
             if (dk === 'rune') {
-              ctx.strokeStyle = 'rgba(160,190,255,0.35)';
-              ctx.lineWidth = Math.max(1, viewScale * 0.5);
-              ctx.strokeRect(px + 4 * viewScale, py + 4 * viewScale, 8 * viewScale, 8 * viewScale);
+              ctx.strokeStyle = 'rgba(165, 195, 255, 0.34)';
+              ctx.lineWidth = Math.max(1.2, viewScale * 0.35);
+              ctx.beginPath();
+              ctx.arc(cx, cy, ts * 0.28, 0, Math.PI * 2);
+              ctx.stroke();
             }
+            ctx.fillStyle = dk === 'star' ? 'rgba(185, 220, 255, 0.52)' : 'rgba(190, 160, 255, 0.55)';
+            ctx.beginPath();
+            ctx.arc(cx, cy, ts * 0.06, 0, Math.PI * 2);
+            ctx.fill();
           } else {
             const spName = dk === 'crystal' && biome.id === 'void' ? 'crystalViolet' : dk;
             if (G.Spr.s[spName]) ctx.drawImage(G.Spr.s[spName].img, px, py, ts, ts);
@@ -164,19 +193,26 @@ G.Render = (function () {
       }
     }
 
-    // 2. Ground effects (venom clouds, fire zones, boss telegraphs, traps)
+    // 2. Ground effects (venom clouds, fire zones, boss telegraphs)
     if (state.clouds) {
       for (const cl of state.clouds) {
         if (cl.x < x0 || cl.x > x1 || cl.y < y0 || cl.y > y1) continue;
         const k = cl.y * lv.w + cl.x;
         if (!vis[k]) continue;
-        const px = originX + cl.x * ts, py = originY + cl.y * ts;
+        const cx = originX + (cl.x + 0.5) * ts, cy = originY + (cl.y + 0.5) * ts;
         if (cl.kind === 'venom') {
-          ctx.fillStyle = `rgba(110, 210, 80, ${0.28 + 0.1 * Math.sin(time * 4 + cl.x)})`;
-          ctx.fillRect(px + viewScale, py + viewScale, ts - 2 * viewScale, ts - 2 * viewScale);
+          const vg = ctx.createRadialGradient(cx, cy, ts * 0.08, cx, cy, ts * 0.52);
+          vg.addColorStop(0, `rgba(140, 235, 95, ${0.42 + 0.1 * Math.sin(time * 4 + cl.x)})`);
+          vg.addColorStop(1, 'rgba(60, 150, 40, 0)');
+          ctx.fillStyle = vg;
+          ctx.beginPath(); ctx.arc(cx, cy, ts * 0.52, 0, Math.PI * 2); ctx.fill();
         } else if (cl.kind === 'fire') {
-          ctx.fillStyle = `rgba(255, 110, 35, ${0.32 + 0.14 * Math.sin(time * 7 + cl.y)})`;
-          ctx.fillRect(px + 2 * viewScale, py + 2 * viewScale, ts - 4 * viewScale, ts - 4 * viewScale);
+          const fg = ctx.createRadialGradient(cx, cy, ts * 0.06, cx, cy, ts * 0.48);
+          fg.addColorStop(0, `rgba(255, 195, 70, ${0.48 + 0.14 * Math.sin(time * 7 + cl.y)})`);
+          fg.addColorStop(0.55, 'rgba(255, 95, 28, 0.32)');
+          fg.addColorStop(1, 'rgba(200, 40, 10, 0)');
+          ctx.fillStyle = fg;
+          ctx.beginPath(); ctx.arc(cx, cy, ts * 0.48, 0, Math.PI * 2); ctx.fill();
         }
       }
     }
@@ -186,12 +222,20 @@ G.Render = (function () {
         const k = tg.y * lv.w + tg.x;
         if (!exp[k]) continue;
         const px = originX + tg.x * ts, py = originY + tg.y * ts;
-        const pulse = 0.35 + 0.25 * Math.sin(time * 10);
-        ctx.fillStyle = `rgba(255, 55, 70, ${pulse})`;
-        ctx.fillRect(px + viewScale, py + viewScale, ts - 2 * viewScale, ts - 2 * viewScale);
-        ctx.strokeStyle = '#ff5a6a';
-        ctx.lineWidth = Math.max(2, viewScale);
-        ctx.strokeRect(px + viewScale, py + viewScale, ts - 2 * viewScale, ts - 2 * viewScale);
+        const pulse = 0.34 + 0.24 * Math.sin(time * 10);
+        ctx.fillStyle = `rgba(255, 50, 72, ${pulse})`;
+        ctx.beginPath();
+        ctx.roundRect(px + ts * 0.06, py + ts * 0.06, ts * 0.88, ts * 0.88, ts * 0.12);
+        ctx.fill();
+        ctx.strokeStyle = '#ff6a7a';
+        ctx.lineWidth = Math.max(2, viewScale * 0.65);
+        ctx.stroke();
+        // Danger rune cross inside telegraph tile
+        ctx.beginPath();
+        ctx.arc(px + ts / 2, py + ts / 2, ts * 0.24, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 210, 215, 0.8)';
+        ctx.lineWidth = Math.max(1.5, viewScale * 0.35);
+        ctx.stroke();
       }
     }
 
@@ -204,22 +248,24 @@ G.Render = (function () {
       if (o.type === 'trap') {
         if (o.hidden) continue;
         const col = o.kind === 'fire' ? '#ff7a2a' : o.kind === 'poison' ? '#9be15d' : o.kind === 'teleport' ? '#7fd8ff' : '#d0d4dc';
+        const cx = px + ts / 2, cy = py + ts / 2;
         ctx.strokeStyle = col;
-        ctx.lineWidth = Math.max(1, viewScale * 0.7);
-        ctx.strokeRect(px + 3 * viewScale, py + 3 * viewScale, ts - 6 * viewScale, ts - 6 * viewScale);
+        ctx.lineWidth = Math.max(1.6, viewScale * 0.45);
+        ctx.strokeRect(px + ts * 0.22, py + ts * 0.22, ts * 0.56, ts * 0.56);
         ctx.fillStyle = col;
-        ctx.fillRect(px + 7 * viewScale, py + 7 * viewScale, 2 * viewScale, 2 * viewScale);
+        ctx.beginPath(); ctx.arc(cx, cy, ts * 0.12, 0, Math.PI * 2); ctx.fill();
       } else if (o.type === 'chest') {
         const sp = o.open ? G.Spr.s.chestOpen : G.Spr.s.chest;
         ctx.drawImage(sp.img, px, py, ts, ts);
       } else if (o.type === 'shrine') {
-        ctx.drawImage(G.Spr.s.shrine.img, px, py, ts, ts);
         if (!o.used && vis[k]) {
-          ctx.fillStyle = `rgba(130, 230, 255, ${0.18 + 0.1 * Math.sin(time * 3)})`;
-          ctx.beginPath();
-          ctx.arc(px + ts / 2, py + ts / 2, ts * 0.45, 0, Math.PI * 2);
-          ctx.fill();
+          const shg = ctx.createRadialGradient(px + ts / 2, py + ts * 0.4, ts * 0.05, px + ts / 2, py + ts * 0.4, ts * 0.58);
+          shg.addColorStop(0, `rgba(130, 235, 255, ${0.30 + 0.12 * Math.sin(time * 3)})`);
+          shg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = shg;
+          ctx.beginPath(); ctx.arc(px + ts / 2, py + ts * 0.4, ts * 0.58, 0, Math.PI * 2); ctx.fill();
         }
+        ctx.drawImage(G.Spr.s.shrine.img, px, py, ts, ts);
       } else if (o.type === 'merchant') {
         if (vis[k]) ctx.drawImage(G.Spr.s.merchant.img, px, py, ts, ts);
       }
@@ -231,13 +277,13 @@ G.Render = (function () {
       const k = it.y * lv.w + it.x;
       if (!exp[k]) continue;
       const px = originX + it.x * ts, py = originY + it.y * ts;
-      const bob = Math.sin(time * 3.5 + it.x) * viewScale * 0.6;
+      const bob = Math.sin(time * 3.5 + it.x) * ts * 0.04;
       if (it.gold) {
-        ctx.drawImage(G.Spr.s.gold.img, px, py + bob, ts, ts);
+        ctx.drawImage(G.Spr.s.gold.img, px + ts * 0.08, py + ts * 0.08 + bob, ts * 0.84, ts * 0.84);
       } else if (it.item) {
         const def = G.ITEMS[it.item.id];
         const icon = G.Spr.icons[def.icon];
-        if (icon) ctx.drawImage(icon, px + 2 * viewScale, py + 2 * viewScale + bob, ts - 4 * viewScale, ts - 4 * viewScale);
+        if (icon) ctx.drawImage(icon, px + ts * 0.1, py + ts * 0.1 + bob, ts * 0.8, ts * 0.8);
       }
     }
 
@@ -262,30 +308,41 @@ G.Render = (function () {
       if (!sp) continue;
 
       const scaleMul = a.scale || 1;
-      const dw = sp.w * viewScale * scaleMul;
-      const dh = sp.h * viewScale * scaleMul;
+      const flyHover = !isPlayer && a.fly ? Math.sin(time * 4.2 + (a.uid || 0)) * ts * 0.05 : 0;
+      const dw = ts * scaleMul;
+      const dh = ts * scaleMul;
       const ox = px + (ts - dw) / 2;
-      const oy = py + ts - dh - (a.hop || 0) * viewScale * 3;
+      const oy = py + ts - dh - (a.hop || 0) * ts * 0.22 - flyHover;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.42)';
+      // Ground drop shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.beginPath();
-      ctx.ellipse(px + ts / 2, py + ts - 2 * viewScale, ts * 0.34 * scaleMul, ts * 0.14 * scaleMul, 0, 0, Math.PI * 2);
+      ctx.ellipse(px + ts / 2, py + ts * 0.90, ts * 0.34 * scaleMul, ts * 0.13 * scaleMul, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Elite / boss aura
+      // Boss / Elite magic aura circle
       if (!isPlayer && (a.elite || a.boss)) {
-        ctx.strokeStyle = a.boss ? 'rgba(255, 195, 80, 0.55)' : 'rgba(200, 120, 255, 0.55)';
-        ctx.lineWidth = Math.max(2, viewScale * 0.8);
+        ctx.save();
+        ctx.strokeStyle = a.boss ? 'rgba(255, 200, 90, 0.65)' : 'rgba(205, 130, 255, 0.60)';
+        ctx.lineWidth = Math.max(2, viewScale * 0.55);
         ctx.beginPath();
-        ctx.ellipse(px + ts / 2, py + ts - 2 * viewScale, ts * 0.42 * scaleMul, ts * 0.18 * scaleMul, 0, 0, Math.PI * 2);
+        ctx.ellipse(px + ts / 2, py + ts * 0.90, ts * 0.44 * scaleMul, ts * 0.17 * scaleMul, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Chilled frost shimmer ring at feet
+      if (!isPlayer && (a.chill || 0) > 0 && !(a.frozen > 0)) {
+        ctx.strokeStyle = 'rgba(130, 225, 255, 0.62)';
+        ctx.lineWidth = Math.max(1.5, viewScale * 0.4);
+        ctx.beginPath();
+        ctx.ellipse(px + ts / 2, py + ts * 0.90, ts * 0.38 * scaleMul, ts * 0.14 * scaleMul, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
 
-      // Draw sprite (or white flash)
-      const img = a.flash > 0 ? sp.flash : sp.img;
+      // Draw crisp HD sprite (flash / frozen variant — no ctx.filter)
+      const img = a.flash > 0 ? sp.flash : (a.frozen > 0 && sp.frozenImg ? sp.frozenImg : sp.img);
       ctx.save();
-      if (a.frozen > 0) ctx.filter = 'hue-rotate(160deg) brightness(1.25)';
       if (a.flip) {
         ctx.translate(ox + dw, oy);
         ctx.scale(-1, 1);
@@ -297,49 +354,58 @@ G.Render = (function () {
 
       // Player shield bubble
       if (isPlayer && pl.shield > 0) {
-        ctx.strokeStyle = `rgba(120, 210, 255, ${0.45 + 0.2 * Math.sin(time * 5)})`;
-        ctx.lineWidth = Math.max(2, viewScale * 0.8);
+        const sg = ctx.createRadialGradient(px + ts / 2, py + ts / 2, ts * 0.25, px + ts / 2, py + ts / 2, ts * 0.56);
+        sg.addColorStop(0, 'rgba(120, 210, 255, 0.04)');
+        sg.addColorStop(0.85, `rgba(120, 210, 255, ${0.28 + 0.12 * Math.sin(time * 5)})`);
+        sg.addColorStop(1, 'rgba(140, 225, 255, 0.72)');
+        ctx.fillStyle = sg;
         ctx.beginPath();
-        ctx.arc(px + ts / 2, py + ts / 2, ts * 0.52, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.arc(px + ts / 2, py + ts / 2, ts * 0.54, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // Status icons / sleeping badge
+      // Status badges & clean HP bar on damaged monsters
       if (!isPlayer) {
+        const badgeSize = Math.max(5, ts * 0.085);
         if (a.asleep) {
-          ctx.fillStyle = '#a8c8ff';
-          ctx.font = `bold ${Math.max(10, viewScale * 3.5)}px monospace`;
-          ctx.fillText('z', px + ts - 4 * viewScale, py + 3 * viewScale);
-        } else if (a.frozen > 0) {
-          ctx.fillStyle = '#8fe6ff';
-          ctx.fillRect(px + 2 * viewScale, py + 2 * viewScale, 3 * viewScale, 3 * viewScale);
-        } else if (a.burn > 0) {
-          ctx.fillStyle = '#ff8a3a';
-          ctx.fillRect(px + 2 * viewScale, py + 2 * viewScale, 3 * viewScale, 3 * viewScale);
-        } else if (a.poison > 0) {
-          ctx.fillStyle = '#9be15d';
-          ctx.fillRect(px + 2 * viewScale, py + 2 * viewScale, 3 * viewScale, 3 * viewScale);
+          ctx.fillStyle = '#a8d0ff';
+          ctx.font = `bold ${Math.max(11, Math.round(ts * 0.24))}px "DotGothic16", monospace`;
+          ctx.fillText('z', px + ts * 0.72, oy + ts * 0.18);
+        } else {
+          let bx = px + ts * 0.12;
+          const by = oy + ts * 0.12;
+          const drawDot = (col) => {
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(bx, by, badgeSize, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#09080f'; ctx.lineWidth = 1.5; ctx.stroke();
+            bx += badgeSize * 2.2;
+          };
+          if (a.frozen > 0) drawDot('#8fe6ff');
+          else if ((a.chill || 0) > 0) drawDot('#5ec8f0');
+          if (a.burn > 0) drawDot('#ff8a3a');
+          if (a.poison > 0) drawDot('#9be15d');
         }
-        // HP bar when damaged
+
         if (a.hp < a.maxHp && !a.boss) {
-          const bw = ts - 4 * viewScale;
-          const bh = Math.max(3, viewScale);
-          const bx = px + 2 * viewScale;
-          const by = py - 2 * viewScale;
-          ctx.fillStyle = '#120f18';
-          ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-          ctx.fillStyle = a.ally ? '#ffd27a' : '#e0485a';
-          ctx.fillRect(bx, by, Math.max(1, Math.round(bw * (a.hp / a.maxHp))), bh);
+          const bw = ts * 0.76;
+          const bh = Math.max(4, Math.round(ts * 0.075));
+          const bx = px + (ts - bw) / 2;
+          const by = oy - bh - 3;
+          ctx.fillStyle = '#0c0b12';
+          ctx.beginPath(); ctx.roundRect(bx - 1.5, by - 1.5, bw + 3, bh + 3, 2); ctx.fill();
+          ctx.fillStyle = a.ally ? '#ffd27a' : '#e6495c';
+          ctx.beginPath();
+          ctx.roundRect(bx, by, Math.max(2, bw * (a.hp / a.maxHp)), bh, 1.5);
+          ctx.fill();
         }
       }
     }
 
-    // 6. Lighting / Fog-of-War overlay (clean FoW + smooth radial warm glows)
+    // 6. Lighting / Fog-of-War overlay
     const amb = biome.ambient;
     const mem = biome.memory;
     const plR = pl.vision || 7;
 
-    // 6a. Fog-of-war memory & subtle distance dimming
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const k = y * lv.w + x;
@@ -363,20 +429,18 @@ G.Render = (function () {
       }
     }
 
-    // 6b. Smooth additive radial glows (player lantern + torches + crystals + lava)
+    // Smooth additive radial glows (lantern, torches, crystals, lava)
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const plCx = originX + (tx + 0.5) * ts;
     const plCy = originY + (ty + 0.5) * ts;
-    const plRad = ts * 4.2 * (0.97 + 0.03 * Math.sin(time * 7));
+    const plRad = ts * 4.3 * (0.97 + 0.03 * Math.sin(time * 7));
     const pg = ctx.createRadialGradient(plCx, plCy, ts * 0.2, plCx, plCy, plRad);
-    pg.addColorStop(0, 'rgba(255, 210, 140, 0.14)');
+    pg.addColorStop(0, 'rgba(255, 212, 145, 0.14)');
     pg.addColorStop(0.55, 'rgba(255, 190, 110, 0.05)');
     pg.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = pg;
-    ctx.beginPath();
-    ctx.arc(plCx, plCy, plRad, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(plCx, plCy, plRad, 0, Math.PI * 2); ctx.fill();
 
     for (const l of lv.lights) {
       const lx = Math.floor(l.x), ly = Math.floor(l.y);
@@ -390,13 +454,11 @@ G.Render = (function () {
       lg.addColorStop(0, `rgba(${l.c[0]}, ${l.c[1]}, ${l.c[2]}, ${alpha})`);
       lg.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = lg;
-      ctx.beginPath();
-      ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
 
-    // 6c. Occasional ambient biome particles in visible area
+    // Ambient biome particles
     if (Math.random() < 0.25) {
       const rx = pl.x + Math.floor((Math.random() - 0.5) * 10);
       const ry = pl.y + Math.floor((Math.random() - 0.5) * 10);
@@ -406,7 +468,7 @@ G.Render = (function () {
       }
     }
 
-    // 7. Targeting overlay (when spell active)
+    // 7. Targeting overlay
     if (state.targeting) {
       const tg = state.targeting;
       const range = G.spellRange(tg.spellId, tg.lv);
@@ -421,11 +483,13 @@ G.Render = (function () {
           if (t === T.WALL || t === T.PILLAR) continue;
           const px = originX + x * ts, py = originY + y * ts;
           ctx.fillStyle = 'rgba(255, 220, 120, 0.12)';
-          ctx.fillRect(px + 1, py + 1, ts - 2, ts - 2);
+          ctx.beginPath();
+          ctx.roundRect(px + 2, py + 2, ts - 4, ts - 4, 4);
+          ctx.fill();
           ctx.strokeStyle = col;
-          ctx.globalAlpha = 0.32;
-          ctx.lineWidth = Math.max(1, viewScale * 0.4);
-          ctx.strokeRect(px + 2, py + 2, ts - 4, ts - 4);
+          ctx.globalAlpha = 0.35;
+          ctx.lineWidth = Math.max(1.2, viewScale * 0.32);
+          ctx.stroke();
           ctx.globalAlpha = 1;
         }
       }
@@ -433,32 +497,41 @@ G.Render = (function () {
         const hx = tg.hover.x, hy = tg.hover.y;
         const px = originX + hx * ts, py = originY + hy * ts;
         ctx.strokeStyle = '#ffd27a';
-        ctx.lineWidth = Math.max(2, viewScale * 0.8);
-        ctx.strokeRect(px + 2, py + 2, ts - 4, ts - 4);
+        ctx.lineWidth = Math.max(2.5, viewScale * 0.65);
+        ctx.beginPath();
+        ctx.roundRect(px + 3, py + 3, ts - 6, ts - 6, 5);
+        ctx.stroke();
       }
     }
 
-    // 8. FX layer (beams, rings, projectiles, particles, floating numbers)
+    // 8. FX layer (glowing beams, rings, projectiles, particles, outlined damage numbers)
     for (const b of G.FX.beams) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, b.life / b.max);
-      ctx.strokeStyle = b.color;
-      ctx.lineWidth = b.width * viewScale;
-      ctx.beginPath();
       const bx0 = originX + b.x0 * ts, by0 = originY + b.y0 * ts;
       const bx1 = originX + b.x1 * ts, by1 = originY + b.y1 * ts;
-      ctx.moveTo(bx0, by0);
+      const pts = [[bx0, by0]];
       if (b.jagged) {
         const segs = 5;
         for (let i = 1; i < segs; i++) {
           const u = i / segs;
-          ctx.lineTo(
-            G.lerp(bx0, bx1, u) + (Math.random() - 0.5) * ts * 0.45,
-            G.lerp(by0, by1, u) + (Math.random() - 0.5) * ts * 0.45
-          );
+          pts.push([
+            G.lerp(bx0, bx1, u) + (Math.random() - 0.5) * ts * 0.42,
+            G.lerp(by0, by1, u) + (Math.random() - 0.5) * ts * 0.42,
+          ]);
         }
       }
-      ctx.lineTo(bx1, by1);
+      pts.push([bx1, by1]);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = b.width * viewScale * 1.4;
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1.5, b.width * viewScale * 0.45);
       ctx.stroke();
       ctx.restore();
     }
@@ -467,7 +540,7 @@ G.Render = (function () {
       ctx.save();
       ctx.globalAlpha = Math.max(0, (r.life / r.max) * 0.85);
       ctx.strokeStyle = r.color;
-      ctx.lineWidth = Math.max(2, viewScale);
+      ctx.lineWidth = Math.max(2, viewScale * 0.7);
       ctx.beginPath();
       ctx.arc(originX + r.x * ts, originY + r.y * ts, r.r * ts, 0, Math.PI * 2);
       ctx.stroke();
@@ -476,35 +549,38 @@ G.Render = (function () {
 
     for (const pr of G.FX.projectiles) {
       const px = originX + pr.x * ts, py = originY + pr.y * ts;
-      ctx.fillStyle = pr.color;
-      ctx.beginPath();
-      ctx.arc(px, py, Math.max(4, viewScale * 2.1), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(px, py, Math.max(2, viewScale * 1.0), 0, Math.PI * 2);
-      ctx.fill();
+      const prRad = Math.max(6, ts * 0.16);
+      const prG = ctx.createRadialGradient(px, py, prRad * 0.2, px, py, prRad * 1.9);
+      prG.addColorStop(0, '#ffffff');
+      prG.addColorStop(0.45, pr.color);
+      prG.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = prG;
+      ctx.beginPath(); ctx.arc(px, py, prRad * 1.9, 0, Math.PI * 2); ctx.fill();
     }
 
     for (const p of G.FX.particles) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, p.life / p.max);
       ctx.fillStyle = p.color;
-      const sz = Math.max(2, p.size * viewScale);
-      ctx.fillRect(originX + p.x * ts - sz / 2, originY + p.y * ts - sz / 2, sz, sz);
+      const radP = Math.max(1.6, p.size * viewScale * 0.42);
+      ctx.beginPath();
+      ctx.arc(originX + p.x * ts, originY + p.y * ts, radP, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
     for (const ft of G.FX.texts) {
       ctx.save();
       ctx.globalAlpha = Math.min(1, (ft.life / ft.max) * 1.6);
-      const sz = Math.max(12, Math.round(viewScale * (ft.big ? 5.2 : 4.1)));
+      const sz = Math.max(13, Math.round(ts * (ft.big ? 0.34 : 0.26)));
       ctx.font = `bold ${sz}px "DotGothic16", monospace`;
       ctx.textAlign = 'center';
       const fx = originX + ft.x * ts;
       const fy = originY + ft.y * ts;
-      ctx.fillStyle = '#09080f';
-      ctx.fillText(ft.text, fx + 2, fy + 2);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#09080f';
+      ctx.lineWidth = Math.max(3, Math.round(sz * 0.22));
+      ctx.strokeText(ft.text, fx, fy);
       ctx.fillStyle = ft.color;
       ctx.fillText(ft.text, fx, fy);
       ctx.restore();

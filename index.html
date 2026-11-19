@@ -3,167 +3,337 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#080b12">
+  <meta name="theme-color" content="#070b14">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>星詠みの迷宮 — ARCANA DEPTHS</title>
-  <meta name="description" content="スマホで遊べる本格魔法ファンタジー・ローグライクRPG。4つの魔導士職、13種の呪文、18種の遺物、4つの階層バイオームと強大なボスが待ち受ける。">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d121d'/%3E%3Cpath d='M8 1l1.8 4.6L14.5 8l-4.7 2.4L8 15l-1.8-4.6L1.5 8l4.7-2.4z' fill='%23ffd27a'/%3E%3C/svg%3E">
+  <title>星霊弾のアルカナ — STELLA BREAKER</title>
+  <meta name="description" content="引っ張り弾道ピンボール×星霊弾マージ×スキル覚醒ローグライクRPG。5人の星霊術士、18種の星霊弾と★EVO神話覚醒、5大巨神ボスに挑め。">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%230b101b'/%3E%3Cpath d='M8 1l2 4.8L15 8l-5 2.2L8 15l-2-4.8L1 8l5-2.2z' fill='%23f4c563'/%3E%3C/svg%3E">
   <link rel="manifest" href="./manifest.json">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <!-- ================= TITLE SCREEN ================= -->
-  <section id="screen-title" class="screen active">
-    <div class="title-bg"></div>
-    <div class="title-vignette"></div>
-    <canvas id="title-fx"></canvas>
+  <div id="app-shell">
+    <!-- ================= 1. HOME APP HUB SCREEN ================= -->
+    <section id="screen-hub" class="screen active">
+      <div class="hub-bg"></div>
+      <div class="hub-vignette"></div>
 
-    <header class="title-head">
-      <div class="title-sub">ARCANA DEPTHS</div>
-      <h1 class="title-logo">星詠みの迷宮</h1>
-      <div class="title-tag">✦ 魔法と星屑のターン制ローグライク ✦</div>
-    </header>
+      <!-- Top Resource Header -->
+      <header class="hub-topbar">
+        <div class="brand-lockup">
+          <span class="brand-sub">STELLA BREAKER</span>
+          <h1 class="brand-title">星霊弾のアルカナ</h1>
+        </div>
+        <div class="resource-bar">
+          <div class="res-pill" title="金貨（タレント・英雄・装備強化）">
+            <span class="res-icon">🪙</span>
+            <strong id="hub-gold">450</strong>
+          </div>
+          <div class="res-pill" title="星晶石（ガチャ召喚・英雄解放）">
+            <span class="res-icon">💎</span>
+            <strong id="hub-gems">1,200</strong>
+          </div>
+          <button id="btn-hub-sound" type="button" class="icon-btn" aria-label="サウンド切替">♪</button>
+        </div>
+      </header>
 
-    <main class="title-menu">
-      <div class="title-meta">
-        <span id="title-best">最高到達: B1F</span>
-        <span class="title-dust">✦ 星屑 <strong id="title-dust">0</strong></span>
+      <!-- Tab Content Viewport -->
+      <main id="hub-main" class="hub-main">
+        <!-- TAB 1: BATTLE LAUNCH (出撃) -->
+        <div id="tab-battle" class="tab-pane active">
+          <!-- Hero Stage Showcase -->
+          <div class="hero-stage-card">
+            <div class="hero-stage-portrait-wrap">
+              <img id="hub-hero-img" class="hero-stage-portrait" src="./assets/portraits/hero_valen.webp" alt="出撃英雄">
+              <span id="hub-hero-elem" class="elem-tag">✦ 星辰</span>
+            </div>
+            <div class="hero-stage-info">
+              <div class="hero-stage-head">
+                <span id="hub-hero-title" class="hero-title-tag">星天の魔弾銃士</span>
+                <span id="hub-power-badge" class="power-badge">総戦力 280</span>
+              </div>
+              <h2 id="hub-hero-name" class="hero-stage-name">ヴァレン <small id="hub-hero-lv">Lv.1</small></h2>
+              <p id="hub-hero-quote" class="hero-quote">「星天の照準は外さない——全弾、解き放て！」</p>
+              <div class="hero-ult-preview">
+                <span class="ult-pill">奥義</span>
+                <span id="hub-hero-ult">アストラル・バレッジ</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chapter Selector Card -->
+          <div class="chapter-card">
+            <div class="chapter-nav-row">
+              <button id="btn-prev-chapter" type="button" class="nav-arrow-btn" aria-label="前の章">◀</button>
+              <div class="chapter-head-center">
+                <span id="ch-status-badge" class="ch-status">挑戦可能</span>
+                <h3 id="ch-title" class="ch-title">第1章：翠苔の骸骨王廟</h3>
+              </div>
+              <button id="btn-next-chapter" type="button" class="nav-arrow-btn" aria-label="次の章">▶</button>
+            </div>
+
+            <div class="chapter-boss-banner">
+              <img id="ch-boss-img" class="ch-boss-portrait" src="./assets/portraits/boss_boneking.webp" alt="章ボス">
+              <div class="ch-boss-meta">
+                <div class="ch-boss-label">守護巨神ボス（2×2）</div>
+                <div id="ch-boss-name" class="ch-boss-name">骸骨王グラヴォス</div>
+                <p id="ch-sub" class="ch-desc">基本の反射とコンボでアンデッド軍団を撃ち砕け</p>
+                <div class="ch-stats-row">
+                  <span id="ch-waves">全 8 WAVE</span>
+                  <span id="ch-best">最高: WAVE 0</span>
+                  <span id="ch-reward" class="ch-reward-tag">初回 💎300</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Patrol & Resume Row -->
+          <div class="launch-aux-row">
+            <button id="btn-patrol" type="button" class="aux-card-btn">
+              <span class="aux-icon">🎁</span>
+              <div class="aux-text">
+                <strong>星霊巡回報酬</strong>
+                <small id="patrol-preview">🪙180 / 💎50 受取可能</small>
+              </div>
+            </button>
+            <button id="btn-quick-gacha" type="button" class="aux-card-btn">
+              <span class="aux-icon">✨</span>
+              <div class="aux-text">
+                <strong>星霊遺物召喚</strong>
+                <small id="gacha-pity-preview">10連でSR以上確定</small>
+              </div>
+            </button>
+          </div>
+
+          <button id="btn-resume-run" type="button" class="btn btn-teal btn-block" style="display:none">
+            <span>▶ 中断した作戦を再開する</span>
+            <small id="resume-sub"></small>
+          </button>
+
+          <button id="btn-start-battle" type="button" class="btn btn-gold btn-launch">
+            <span class="launch-main">✦ 出撃する — BATTLE START ✦</span>
+            <small>引っ張り照準で星霊弾を放ち、合成＆★EVO覚醒で制覇せよ</small>
+          </button>
+        </div>
+
+        <!-- TAB 2: HEROES & GEAR (英雄・装備) -->
+        <div id="tab-heroes" class="tab-pane">
+          <div class="section-head">
+            <h2>星霊術士（プレイアブル英雄）</h2>
+            <small>英雄ごとに固有のパッシブとド派手な奥義を持つ</small>
+          </div>
+          <div id="hero-list" class="hero-list"></div>
+
+          <div class="section-head">
+            <div class="section-head-row">
+              <h2>装着中の星霊装備（4部位）</h2>
+              <button id="btn-merge-gear" type="button" class="btn btn-teal btn-sm">✦ 3合成進化</button>
+            </div>
+            <small>同一装備3つで上位レアリティ（R➔SR➔SSR➔神話UR）へ合成進化！</small>
+          </div>
+          <div id="gear-slots-grid" class="gear-slots-grid"></div>
+
+          <div class="section-head">
+            <h2>所持装備一覧</h2>
+          </div>
+          <div id="gear-inventory-list" class="gear-inventory-list"></div>
+        </div>
+
+        <!-- TAB 3: GACHA & TALENTS (召喚・天賦) -->
+        <div id="tab-summon" class="tab-pane">
+          <div class="gacha-banner-card">
+            <div class="gacha-banner-top">
+              <div>
+                <span class="gacha-tag">✦ 常設ピックアップ召喚 ✦</span>
+                <h2>星霊遺物・神話装備ガチャ</h2>
+                <p>10連召喚でSR以上確定！10回ごとに<strong>SSRまたは神話UR</strong>が確定出現！</p>
+              </div>
+              <div class="pity-box">
+                <small>SSR/UR確定まで</small>
+                <strong id="gacha-pity-count">あと 10 回</strong>
+              </div>
+            </div>
+            <div class="gacha-actions">
+              <button id="btn-summon-1" type="button" class="btn btn-outline">
+                <span>1回召喚</span>
+                <small>💎 100</small>
+              </button>
+              <button id="btn-summon-10" type="button" class="btn btn-gold">
+                <span>✦ 10連召喚（SR+確定）</span>
+                <small>💎 900（1回分お得！）</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="section-head">
+            <h2>星脈タレント（恒久ステータス強化）</h2>
+            <small>金貨を使って全英雄共通の基礎能力を永続強化</small>
+          </div>
+          <div id="talent-grid" class="talent-grid"></div>
+        </div>
+
+        <!-- TAB 4: CODEX & MISSIONS (図鑑・実績) -->
+        <div id="tab-codex" class="tab-pane">
+          <div class="section-head">
+            <h2>実績ミッション（💎星晶石報酬）</h2>
+          </div>
+          <div id="mission-list" class="mission-list"></div>
+
+          <div class="section-head">
+            <h2>★EVO神話覚醒レシピ＆星霊大図鑑</h2>
+            <small>★3星霊弾＋対応する触媒秘伝書で神話級「★EVO弾」に覚醒！</small>
+          </div>
+          <div id="codex-evo-list" class="codex-list"></div>
+        </div>
+      </main>
+
+      <!-- Bottom Navigation Bar (4 Tabs) -->
+      <nav class="hub-bottom-nav" aria-label="メインナビゲーション">
+        <button type="button" class="nav-tab active" data-tab="battle" id="nav-tab-battle">
+          <span class="nav-icon">⚔️</span>
+          <span class="nav-label">出撃</span>
+        </button>
+        <button type="button" class="nav-tab" data-tab="heroes" id="nav-tab-heroes">
+          <span class="nav-icon">🧙</span>
+          <span class="nav-label">英雄・装備</span>
+        </button>
+        <button type="button" class="nav-tab" data-tab="summon" id="nav-tab-summon">
+          <span class="nav-icon">✨</span>
+          <span class="nav-label">召喚・天賦</span>
+        </button>
+        <button type="button" class="nav-tab" data-tab="codex" id="nav-tab-codex">
+          <span class="nav-icon">📖</span>
+          <span class="nav-label">図鑑・実績</span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- ================= 2. BATTLE ARENA SCREEN ================= -->
+    <section id="screen-battle" class="screen">
+      <!-- Top Tactical HUD -->
+      <header class="battle-hud-top">
+        <div class="b-hud-left">
+          <img id="b-hero-avatar" class="b-hero-avatar" src="./assets/portraits/hero_valen.webp" alt="">
+          <div>
+            <div class="b-wave-row">
+              <span id="b-wave-badge" class="wave-badge">WAVE 1/8</span>
+              <span id="b-gold-text" class="b-gold-pill">🪙 0</span>
+            </div>
+            <div class="b-chapter-name" id="b-chapter-name">第1章：翠苔の骸骨王廟</div>
+          </div>
+        </div>
+
+        <div id="combo-banner" class="combo-banner">
+          <strong id="combo-count">0 HIT</strong>
+          <small id="combo-mult">ATK ×1.00</small>
+        </div>
+
+        <div class="b-hud-controls">
+          <button id="btn-speed" type="button" class="ctrl-pill-btn" title="倍速切替">1x</button>
+          <button id="btn-auto" type="button" class="ctrl-pill-btn" title="自動照準・自動発射">AUTO</button>
+          <button id="btn-pause" type="button" class="icon-btn" aria-label="ポーズメニュー">≡</button>
+        </div>
+      </header>
+
+      <!-- Boss HP Bar (Appears on Boss Wave) -->
+      <div id="boss-hud-bar" class="boss-hud-bar" style="display:none">
+        <img id="boss-hud-img" class="boss-hud-portrait" src="./assets/portraits/boss_boneking.webp" alt="">
+        <div class="boss-hud-main">
+          <div class="boss-hud-row">
+            <strong id="boss-hud-name">骸骨王グラヴォス</strong>
+            <span id="boss-hud-hp">1,550 / 1,550</span>
+          </div>
+          <div class="boss-hp-track">
+            <div id="boss-hp-fill" class="boss-hp-fill" style="width:100%"></div>
+          </div>
+        </div>
       </div>
 
-      <button id="btn-continue" type="button" class="btn btn-teal" style="display:none">
-        <span>冒険を続ける</span>
-        <small id="continue-sub"></small>
-      </button>
+      <!-- Main Physics Arena Canvas Container -->
+      <div id="arena-wrap" class="arena-wrap">
+        <canvas id="battle-canvas"></canvas>
 
-      <button id="btn-new-run" type="button" class="btn btn-gold">
-        <span>新たな冒険へ</span>
-        <small>4人の魔導士から選んで迷宮へ潜る</small>
-      </button>
+        <!-- Aim Hint Banner -->
+        <div id="aim-hint" class="aim-hint">画面をドラッグして照準 ➔ 指を離して一斉発射！</div>
 
-      <button id="btn-sanctuary" type="button" class="btn btn-outline">
-        <span>星詠みの聖域</span>
-        <small>星屑で恒久強化・魔導士解放</small>
-      </button>
+        <!-- Recall Orbs Button (Appears during long flight) -->
+        <button id="btn-recall" type="button" class="recall-btn" style="display:none">
+          ⏬ 星霊弾を回収
+        </button>
 
-      <div class="title-row">
-        <button id="btn-codex" type="button" class="btn btn-outline btn-sm">魔導書・図鑑</button>
-        <button id="btn-title-settings" type="button" class="btn btn-outline btn-sm">設定</button>
-      </div>
-    </main>
-  </section>
-
-  <!-- ================= GAME SCREEN ================= -->
-  <section id="screen-game" class="screen">
-    <header class="hud-top">
-      <button id="hud-avatar" type="button" class="hud-avatar" title="術士ステータス・遺物" aria-label="ステータス">
-        <img id="hud-avatar-img" alt="">
-      </button>
-      <div class="hud-loc">
-        <div class="hud-floor-row">
-          <span id="hud-floor" class="floor-badge">B1F</span>
-          <span id="hud-biome" class="biome-name">苔むす地下墓所</span>
-        </div>
-        <div class="hud-res">
-          <span class="hud-gold">金貨 <strong id="hud-gold">0</strong>G</span>
-          <span id="hud-turn">T1</span>
-          <span>魔力 <strong id="stat-pow">0</strong></span>
-          <span>防御 <strong id="stat-def">0</strong></span>
+        <!-- Ultimate Cut-in Banner Overlay -->
+        <div id="ult-cutin" class="ult-cutin" style="display:none">
+          <img id="ult-cutin-img" src="./assets/portraits/hero_valen.webp" alt="">
+          <div class="ult-cutin-text">
+            <small id="ult-cutin-hero">ヴァレン 奥義発動！</small>
+            <strong id="ult-cutin-name">アストラル・バレッジ</strong>
+          </div>
         </div>
       </div>
 
-      <div class="hud-right">
-        <div id="mini-wrap" title="地図を拡大">
-          <canvas id="mini-canvas" width="96" height="96"></canvas>
+      <!-- Bottom Tactical Cockpit (HP/EXP + 6-Slot Merge Rack + Ultimate Button) -->
+      <footer class="battle-cockpit">
+        <div class="cockpit-bars">
+          <div class="bar-track hp-track">
+            <div id="b-hp-fill" class="bar-fill hp-fill" style="width:100%"></div>
+            <div id="b-shield-fill" class="bar-fill shield-fill" style="width:0%"></div>
+            <div class="bar-text">
+              <span>HP</span>
+              <strong id="b-hp-text">320 / 320</strong>
+            </div>
+          </div>
+          <div class="bar-track xp-track">
+            <div id="b-xp-fill" class="bar-fill xp-fill" style="width:0%"></div>
+            <div class="bar-text">
+              <span id="b-lv-text">Lv.1</span>
+              <small id="b-balls-total">装填 10発</small>
+            </div>
+          </div>
         </div>
-        <button id="btn-hud-sound" type="button" class="icon-btn" aria-label="Sound">♪</button>
-        <button id="btn-hud-menu" type="button" class="icon-btn" aria-label="Menu">≡</button>
-      </div>
-    </header>
 
-    <div class="hud-stats">
-      <div class="bars-row">
-        <div class="bar-box">
-          <div id="hp-fill" class="bar-fill hp-fill" style="width:100%"></div>
-          <div class="bar-label"><span>HP</span><span id="hp-text">28/28</span></div>
+        <div class="cockpit-main-row">
+          <!-- 6-Slot Orb Loadout & Merge Rack -->
+          <div class="rack-container">
+            <div class="rack-head-row">
+              <span class="rack-title">星霊装填ラック（同種タップで合成進化）</span>
+              <button id="btn-rack-merge" type="button" class="rack-merge-btn" style="display:none">
+                ✦ 一括合成！
+              </button>
+            </div>
+            <div id="orb-rack" class="orb-rack"></div>
+          </div>
+
+          <!-- Hero Active Ultimate Trigger Button -->
+          <button id="btn-ult" type="button" class="ult-btn" title="奥義ゲージ100%で発動可能">
+            <div class="ult-ring-wrap">
+              <img id="ult-btn-img" src="./assets/portraits/hero_valen.webp" alt="奥義">
+              <div id="ult-pct-badge" class="ult-pct-badge">35%</div>
+            </div>
+            <span class="ult-label">奥義</span>
+          </button>
         </div>
-        <div class="bar-box">
-          <div id="mp-fill" class="bar-fill mp-fill" style="width:100%"></div>
-          <div class="bar-label"><span>MP</span><span id="mp-text">24/24</span></div>
+      </footer>
+    </section>
+
+    <!-- ================= 3. UNIVERSAL MODAL OVERLAY ================= -->
+    <div id="modal-backdrop" class="modal-backdrop">
+      <div id="modal-card" class="modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <span id="modal-title" class="modal-title"></span>
+          <button id="modal-close" type="button" class="modal-close" aria-label="閉じる">✕</button>
         </div>
-      </div>
-      <div class="sub-stats">
-        <div class="lvl-wrap">
-          <span id="lvl-badge">Lv.1</span>
-          <div class="xp-bar"><div id="xp-fill" style="width:0%"></div></div>
-        </div>
-        <div id="status-pills"></div>
+        <div id="modal-body" class="modal-body"></div>
       </div>
     </div>
 
-    <div id="boss-bar">
-      <img id="boss-portrait-img" class="boss-portrait" alt="">
-      <div class="boss-info">
-        <div class="boss-head">
-          <span id="boss-name">BOSS</span>
-          <span id="boss-hp-val">80/80</span>
-        </div>
-        <div class="boss-track"><div id="boss-hp-fill" style="width:100%"></div></div>
-      </div>
-    </div>
-
-    <div id="canvas-wrap">
-      <canvas id="game-canvas"></canvas>
-      <div id="log-preview" title="冒険の記録を開く"></div>
-
-      <button id="btn-stairs" type="button">階段を降りる ▼</button>
-
-      <div id="target-banner">
-        <span id="target-text">標的をタップ</span>
-        <button id="btn-cancel-target" type="button" class="btn btn-outline btn-sm">取消</button>
-      </div>
-
-      <div id="dpad-overlay">
-        <button type="button" data-dir="-1,-1">↖</button>
-        <button type="button" data-dir="0,-1">↑</button>
-        <button type="button" data-dir="1,-1">↗</button>
-        <button type="button" data-dir="-1,0">←</button>
-        <button type="button" data-dir="0,0">・</button>
-        <button type="button" data-dir="1,0">→</button>
-        <button type="button" data-dir="-1,1">↙</button>
-        <button type="button" data-dir="0,1">↓</button>
-        <button type="button" data-dir="1,1">↘</button>
-      </div>
-    </div>
-
-    <footer class="hud-bottom">
-      <div class="action-row">
-        <button id="act-explore" type="button" class="act-btn">探索</button>
-        <button id="act-wait" type="button" class="act-btn">待機</button>
-        <button id="act-bag" type="button" class="act-btn">鞄 <span id="bag-count" class="badge">0</span></button>
-        <button id="act-relics" type="button" class="act-btn">遺物</button>
-        <button id="act-dpad" type="button" class="act-btn">十字</button>
-      </div>
-      <div id="spell-bar" class="spell-bar"></div>
-    </footer>
-  </section>
-
-  <!-- ================= MODAL ================= -->
-  <div id="modal-backdrop">
-    <div id="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <span id="modal-title"></span>
-        <button id="modal-close" type="button">✕</button>
-      </div>
-      <div id="modal-body"></div>
-    </div>
+    <!-- Toast Notification -->
+    <div id="toast-box" class="toast-box"></div>
   </div>
 
   <script src="./js/util.js"></script>
   <script src="./js/data.js"></script>
   <script src="./js/sprites.js"></script>
-  <script src="./js/dungeon.js"></script>
-  <script src="./js/map.js"></script>
   <script src="./js/audio.js"></script>
   <script src="./js/fx.js"></script>
   <script src="./js/render.js"></script>

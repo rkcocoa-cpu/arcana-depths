@@ -1,10 +1,12 @@
 'use strict';
 /* =========================================================
- *  ui.js : mobile-first fantasy HUD, modals, touch/pointer
- *          & keyboard input, title screen, compendium
+ *  星霊弾のアルカナ — STELLA BREAKER
+ *  ui.js : 4-Tab Home Hub, Battle Cockpit, Touch Aiming,
+ *          Orb Rack Merge, 3-Choice Draft, Gacha & Modals
  * ========================================================= */
 G.UI = (function () {
   const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
   const el = (tag, cls, html) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -12,1059 +14,1022 @@ G.UI = (function () {
     return n;
   };
 
-  let screen = 'title';
-  let activeModal = null;
-  let titleMotes = [];
+  let currentScreen = 'hub';
+  let currentTab = 'battle';
+  let isAiming = false;
   let lastTime = performance.now();
+  let toastTimer = null;
+  let modalLocked = false;
 
-  const classPortraitURL = (id) => `./assets/portraits/class_${id}.webp`;
-  const bossPortraitURL = (id) => `./assets/portraits/boss_${id}.webp`;
-
-  function shrineBannerSVG() {
-    return `
-      <svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="星の祭壇">
-        <defs>
-          <linearGradient id="sh-bg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#0a1020"/>
-            <stop offset="55%" stop-color="#13223b"/>
-            <stop offset="100%" stop-color="#090d18"/>
-          </linearGradient>
-          <radialGradient id="sh-beam" cx="50%" cy="42%" r="48%">
-            <stop offset="0%" stop-color="#9cf2ff" stop-opacity="0.72"/>
-            <stop offset="35%" stop-color="#48b8e0" stop-opacity="0.34"/>
-            <stop offset="72%" stop-color="#e8c170" stop-opacity="0.12"/>
-            <stop offset="100%" stop-color="#090d18" stop-opacity="0"/>
-          </radialGradient>
-          <linearGradient id="sh-stone" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#3c4c68"/>
-            <stop offset="50%" stop-color="#253147"/>
-            <stop offset="100%" stop-color="#131926"/>
-          </linearGradient>
-          <linearGradient id="sh-gold" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#fff0a8"/>
-            <stop offset="55%" stop-color="#e8b84a"/>
-            <stop offset="100%" stop-color="#8c621c"/>
-          </linearGradient>
-        </defs>
-        <rect width="640" height="360" fill="url(#sh-bg)"/>
-        <!-- Vaulted archway & background ruins -->
-        <path d="M90 360 V155 C90 48 210 18 320 18 C430 18 550 48 550 155 V360 Z" fill="#0d1526" stroke="#22304a" stroke-width="4"/>
-        <path d="M135 360 V168 C135 80 230 52 320 52 C410 52 505 80 505 168 V360 Z" fill="#101a2e" stroke="#2c3e5e" stroke-width="3"/>
-        <rect x="0" y="292" width="640" height="68" fill="#0c121e"/>
-        <ellipse cx="320" cy="298" rx="220" ry="26" fill="none" stroke="#48a8d8" stroke-opacity="0.35" stroke-width="2"/>
-        <ellipse cx="320" cy="298" rx="165" ry="18" fill="none" stroke="#e8c170" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="10 6"/>
-        <!-- Celestial Aura -->
-        <circle cx="320" cy="148" r="158" fill="url(#sh-beam)"/>
-        <polygon points="278,0 362,0 342,250 298,250" fill="#7fe3ff" fill-opacity="0.08"/>
-        <!-- Pedestal & Ornate Chalice -->
-        <polygon points="222,300 418,300 398,274 242,274" fill="url(#sh-stone)" stroke="#080b12" stroke-width="3"/>
-        <rect x="256" y="206" width="128" height="68" rx="4" fill="url(#sh-stone)" stroke="#080b12" stroke-width="3"/>
-        <rect x="242" y="192" width="156" height="18" rx="4" fill="#465978" stroke="#080b12" stroke-width="3"/>
-        <!-- Carved rune inlay -->
-        <path d="M294 224 L320 212 L346 224 L320 260 Z" fill="#18283e" stroke="#7fe3ff" stroke-width="2"/>
-        <circle cx="320" cy="235" r="7" fill="#7fe3ff"/>
-        <!-- Floating Astral Star & Orb -->
-        <circle cx="320" cy="138" r="24" fill="#d8fbff" stroke="#7fe3ff" stroke-width="3"/>
-        <path d="M320 82 L331 125 L374 138 L331 151 L320 194 L309 151 L266 138 L309 125 Z" fill="url(#sh-gold)" stroke="#0c0e18" stroke-width="2.5"/>
-        <circle cx="320" cy="138" r="9" fill="#ffffff"/>
-        <!-- Orbiting Runes & Starlight -->
-        <circle cx="228" cy="142" r="4" fill="#ffd27a"/>
-        <circle cx="414" cy="128" r="4" fill="#7fe3ff"/>
-        <circle cx="262" cy="94" r="3" fill="#7fe3ff"/>
-        <circle cx="384" cy="96" r="3" fill="#ffd27a"/>
-        <circle cx="195" cy="198" r="2.5" fill="#9ce8ff"/>
-        <circle cx="445" cy="186" r="2.5" fill="#ffd27a"/>
-        <!-- Twin Candelabra Silhouette Glow -->
-        <rect x="166" y="214" width="12" height="78" fill="#1b2436" stroke="#080b12" stroke-width="2"/>
-        <circle cx="172" cy="206" r="18" fill="#ffcf60" fill-opacity="0.32"/>
-        <circle cx="172" cy="206" r="5" fill="#fff0a8"/>
-        <rect x="462" y="214" width="12" height="78" fill="#1b2436" stroke="#080b12" stroke-width="2"/>
-        <circle cx="468" cy="206" r="18" fill="#ffcf60" fill-opacity="0.32"/>
-        <circle cx="468" cy="206" r="5" fill="#fff0a8"/>
-      </svg>`;
+  function showToast(msg) {
+    const box = $('#toast-box');
+    if (!box) return;
+    box.textContent = msg;
+    box.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => box.classList.remove('show'), 2100);
   }
 
-  function init() {
-    G.Spr.init();
-    G.Render.init($('#game-canvas'), $('#mini-canvas'));
-    bindTitle();
-    bindGameInput();
-    bindKeyboard();
-    G.Game.onUI(onGameUpdate);
-
-    window.addEventListener('resize', () => {
-      G.Render.resize();
-    });
-
-    // Unlock Web Audio on first user interaction
-    const unlock = () => { G.Audio.unlock(); };
-    window.addEventListener('pointerdown', unlock, { passive: true });
-    window.addEventListener('keydown', unlock, { passive: true });
-
-    refreshTitle();
-    requestAnimationFrame(loop);
-  }
-
-  /* ---------- Animation Loop ---------- */
-  function loop(now) {
-    const dt = Math.min(0.05, (now - lastTime) / 1000);
-    lastTime = now;
-
-    if (screen === 'title') {
-      drawTitleMotes(dt);
-    } else if (screen === 'game' && G.Game.state) {
-      if (G.FX.hitStop <= 0) {
-        G.Game.updateVisuals(dt);
-      }
-      G.FX.update(dt);
-      G.Render.drawFrame(G.Game.state, dt);
-    }
-    requestAnimationFrame(loop);
-  }
-
-  function drawTitleMotes(dt) {
-    const c = $('#title-fx');
-    if (!c) return;
-    const rect = c.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(1, Math.floor(rect.width * dpr));
-    const h = Math.max(1, Math.floor(rect.height * dpr));
-    if (c.width !== w || c.height !== h) {
-      c.width = w;
-      c.height = h;
-    }
-    const x = c.getContext('2d');
-    x.clearRect(0, 0, c.width, c.height);
-    if (titleMotes.length < 40) {
-      titleMotes.push({
-        x: Math.random() * c.width,
-        y: c.height * (0.2 + Math.random() * 0.8),
-        vy: (-12 - Math.random() * 18) * dpr,
-        vx: (Math.random() - 0.5) * 9 * dpr,
-        r: (1.4 + Math.random() * 2.4) * dpr,
-        a: Math.random() * Math.PI * 2,
-        star: Math.random() < 0.25,
-        col: Math.random() < 0.6 ? '#ffd27a' : '#7fe3ff',
-      });
-    }
-    for (let i = titleMotes.length - 1; i >= 0; i--) {
-      const m = titleMotes[i];
-      m.x += m.vx * dt;
-      m.y += m.vy * dt;
-      m.a += dt * 3;
-      if (m.y < -12 * dpr) { titleMotes.splice(i, 1); continue; }
-      const alpha = 0.28 + 0.52 * Math.abs(Math.sin(m.a));
-      x.save();
-      x.globalAlpha = alpha * 0.45;
-      x.fillStyle = m.col;
-      x.beginPath();
-      x.arc(m.x, m.y, m.r * 2.2, 0, Math.PI * 2);
-      x.fill();
-      x.globalAlpha = alpha;
-      if (m.star) {
-        const s = m.r * 1.9;
-        x.fillStyle = '#ffffff';
-        x.beginPath();
-        x.moveTo(m.x, m.y - s);
-        x.lineTo(m.x + s * 0.28, m.y - s * 0.28);
-        x.lineTo(m.x + s, m.y);
-        x.lineTo(m.x + s * 0.28, m.y + s * 0.28);
-        x.lineTo(m.x, m.y + s);
-        x.lineTo(m.x - s * 0.28, m.y + s * 0.28);
-        x.lineTo(m.x - s, m.y);
-        x.lineTo(m.x - s * 0.28, m.y - s * 0.28);
-        x.closePath();
-        x.fill();
-      } else {
-        x.fillStyle = '#fff9ea';
-        x.beginPath();
-        x.arc(m.x, m.y, m.r * 0.72, 0, Math.PI * 2);
-        x.fill();
-      }
-      x.restore();
-    }
-  }
-
-  function showScreen(name) {
-    screen = name;
-    $('#screen-title').classList.toggle('active', name === 'title');
-    $('#screen-game').classList.toggle('active', name === 'game');
-    if (name === 'game') {
-      setTimeout(() => G.Render.resize(), 20);
+  function switchScreen(scr) {
+    currentScreen = scr;
+    clearTimeout(toastTimer);
+    const box = $('#toast-box');
+    if (box) box.classList.remove('show');
+    $('#screen-hub').classList.toggle('active', scr === 'hub');
+    $('#screen-battle').classList.toggle('active', scr === 'battle');
+    if (scr === 'battle') {
+      requestAnimationFrame(() => G.Render.resize());
     } else {
-      refreshTitle();
+      renderHub();
     }
   }
 
-  /* ---------- Title Screen ---------- */
-  function bindTitle() {
-    $('#btn-continue').addEventListener('click', () => {
-      G.Audio.play('tap');
-      if (G.Game.resumeRun()) showScreen('game');
-    });
-    $('#btn-new-run').addEventListener('click', () => {
-      G.Audio.play('tap');
-      openClassModal();
-    });
-    $('#btn-sanctuary').addEventListener('click', () => {
-      G.Audio.play('tap');
-      openSanctuaryModal();
-    });
-    $('#btn-codex').addEventListener('click', () => {
-      G.Audio.play('tap');
-      openCodexModal();
-    });
-    $('#btn-title-settings').addEventListener('click', () => {
-      G.Audio.play('tap');
-      openSettingsModal(false);
-    });
+  function switchTab(tabId) {
+    currentTab = tabId;
+    $$('.nav-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tabId));
+    $$('.tab-pane').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + tabId));
+    renderHub();
   }
 
-  function refreshTitle() {
-    const meta = G.Game.loadMeta();
-    $('#title-dust').textContent = meta.dust;
-    $('#title-best').textContent = `最高到達: B${meta.stats.bestFloor}F / 討伐: ${meta.stats.kills} / 制覇: ${meta.stats.wins}`;
-    const hasSave = G.Game.hasSavedRun();
-    const cont = $('#btn-continue');
-    cont.style.display = hasSave ? 'flex' : 'none';
-    if (hasSave) {
-      try {
-        const d = JSON.parse(localStorage.getItem('arcana_run_v1'));
-        $('#continue-sub').textContent = `B${d.floor}F ・ ${G.CLASSES[d.cls].name} Lv.${d.player.lvl}`;
-      } catch (e) { $('#continue-sub').textContent = ''; }
+  /* =========================================================
+   *  1. HOME HUB RENDERING (4 TABS)
+   * ========================================================= */
+  function renderHub() {
+    const meta = G.Game.meta;
+    if (!meta) return;
+
+    // Top bar resources
+    $('#hub-gold').textContent = G.fmtNum(meta.gold);
+    $('#hub-gems').textContent = G.fmtNum(meta.gems);
+    $('#btn-hub-sound').textContent = G.Audio.isEnabled() ? '♪' : '✕';
+
+    // Tab 1: Battle Launch
+    const hero = G.HEROES[meta.selectedHero] || G.HEROES.valen;
+    const hLv = meta.heroLevels[hero.id] || 1;
+    const stats = G.Game.calcTotalStats(hero.id);
+    const elem = G.ELEMS[hero.elem] || G.ELEMS.star;
+
+    $('#hub-hero-img').src = hero.portrait;
+    $('#hub-hero-elem').textContent = `${elem.badge} ${elem.name}`;
+    $('#hub-hero-title').textContent = hero.title;
+    $('#hub-power-badge').textContent = `総戦力 ${G.fmtNum(stats.power)}`;
+    $('#hub-hero-name').innerHTML = `${hero.name} <small>Lv.${hLv}</small>`;
+    $('#hub-hero-quote').textContent = hero.quote;
+    $('#hub-hero-ult').textContent = hero.ultName;
+
+    // Chapter Card
+    const chId = G.clamp(meta.selectedChapter || 1, 1, G.CHAPTERS.length);
+    const ch = G.CHAPTERS.find((c) => c.id === chId) || G.CHAPTERS[0];
+    const boss = G.BOSSES[ch.boss] || G.BOSSES.boneking;
+    const cleared = !!meta.chaptersCleared[ch.id];
+    const bestWave = meta.bestWaves[ch.id] || 0;
+
+    $('#ch-status-badge').textContent = cleared ? '★ 制覇済み' : `推奨戦力 ${ch.recPower}`;
+    $('#ch-title').textContent = ch.name;
+    $('#ch-boss-img').src = boss.portrait;
+    $('#ch-boss-name').textContent = boss.name;
+    $('#ch-sub').textContent = ch.sub;
+    $('#ch-waves').textContent = `全 ${ch.waves} WAVE`;
+    $('#ch-best').textContent = `最高: WAVE ${bestWave}/${ch.waves}`;
+    $('#ch-reward').textContent = cleared ? `周回報酬 🪙${ch.clearGold}` : `初回クリア 💎${ch.firstGems}`;
+
+    // Patrol & Gacha previews
+    const pat = G.Game.getPatrolRewardPreview();
+    $('#patrol-preview').textContent = `🪙${pat.gold} / 💎${pat.gems} 受取可能`;
+    const leftPity = Math.max(1, 10 - (meta.pity || 0));
+    $('#gacha-pity-preview').textContent = `あと${leftPity}回でSSR/UR確定`;
+
+    // Resume button
+    const hasRun = G.Game.hasSavedRun();
+    const resBtn = $('#btn-resume-run');
+    resBtn.style.display = hasRun ? 'inline-flex' : 'none';
+    if (hasRun) {
+      $('#resume-sub').textContent = '前回のバトル進行状況から再開';
     }
+
+    if (currentTab === 'heroes') renderHeroesAndGearTab();
+    if (currentTab === 'summon') renderSummonAndTalentsTab();
+    if (currentTab === 'codex') renderCodexAndMissionsTab();
   }
 
-  /* ---------- Game Input (Touch / Pointer / D-pad / Keyboard) ---------- */
-  function bindGameInput() {
-    const canvas = $('#game-canvas');
-    let pointerDownPos = null;
-    let holdTimer = null;
-    let heldInspect = false;
+  function renderHeroesAndGearTab() {
+    const meta = G.Game.meta;
+    const list = $('#hero-list');
+    list.innerHTML = '';
 
-    canvas.addEventListener('pointerdown', (e) => {
-      if (screen !== 'game' || activeModal) return;
-      pointerDownPos = { x: e.clientX, y: e.clientY, t: performance.now() };
-      heldInspect = false;
-      const st = G.Game.state;
-      const tile = G.Render.screenToTile(e.clientX, e.clientY);
-      if (st && st.targeting && tile) st.targeting.hover = tile;
-      clearTimeout(holdTimer);
-      if (tile && st) {
-        holdTimer = setTimeout(() => {
-          const m = st.monsters.find((x) => x.hp > 0 && x.x === tile.x && x.y === tile.y);
-          if (m && st.vis[m.y * st.level.w + m.x]) {
-            heldInspect = true;
-            openMonsterInfoModal(m);
-          }
-        }, 430);
-      }
-    });
+    for (const hId of G.HERO_ORDER) {
+      const h = G.HEROES[hId];
+      const unlocked = meta.unlockedHeroes.includes(hId);
+      const selected = meta.selectedHero === hId;
+      const lv = meta.heroLevels[hId] || 1;
+      const upCost = Math.round(100 * Math.pow(1.42, lv - 1));
+      const elem = G.ELEMS[h.elem] || G.ELEMS.star;
 
-    canvas.addEventListener('pointermove', (e) => {
-      if (pointerDownPos && Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 12) {
-        clearTimeout(holdTimer);
-      }
-      const st = G.Game.state;
-      if (!st || !st.targeting) return;
-      const tile = G.Render.screenToTile(e.clientX, e.clientY);
-      if (tile) st.targeting.hover = tile;
-    });
-
-    canvas.addEventListener('pointerup', (e) => {
-      clearTimeout(holdTimer);
-      if (heldInspect) { pointerDownPos = null; return; }
-      if (screen !== 'game' || activeModal || !pointerDownPos) return;
-      const dx = e.clientX - pointerDownPos.x;
-      const dy = e.clientY - pointerDownPos.y;
-      const dist = Math.hypot(dx, dy);
-      pointerDownPos = null;
-
-      // Swipe gesture (>= 28px) -> 8-way step!
-      if (dist >= 28) {
-        const ang = Math.atan2(dy, dx);
-        const oct = Math.round(ang / (Math.PI / 4));
-        const dirs = {
-          '0': [1, 0], '1': [1, 1], '2': [0, 1], '3': [-1, 1],
-          '4': [-1, 0], '-4': [-1, 0], '-3': [-1, -1], '-2': [0, -1], '-1': [1, -1],
+      const card = el('div', 'hero-card' + (selected ? ' selected' : ''));
+      card.innerHTML = `
+        <img class="hero-card-img" src="${h.portrait}" alt="${h.name}">
+        <div class="hero-card-body">
+          <div class="hero-card-title">
+            <span>${h.name}</span>
+            <small style="color:var(--gold)">${unlocked ? 'Lv.' + lv : '未解放'}</small>
+            <small style="color:${elem.color}">${elem.badge}${elem.name}</small>
+          </div>
+          <div class="hero-card-sub"><strong>特性:</strong> ${h.passiveDesc}</div>
+          <div class="hero-card-sub"><strong>奥義:</strong> ${h.ultName} — ${h.ultDesc}</div>
+        </div>
+      `;
+      const acts = el('div', 'hero-card-actions');
+      if (unlocked) {
+        if (!selected) {
+          const selBtn = el('button', 'btn btn-outline btn-sm', '出撃選択');
+          selBtn.type = 'button';
+          selBtn.onclick = () => G.Game.selectHero(hId);
+          acts.appendChild(selBtn);
+        } else {
+          const badge = el('span', 'power-badge', '✦ 出撃中');
+          badge.style.textAlign = 'center';
+          acts.appendChild(badge);
+        }
+        const upBtn = el('button', 'btn btn-gold btn-sm', `強化 🪙${upCost}`);
+        upBtn.type = 'button';
+        upBtn.onclick = () => {
+          const r = G.Game.unlockOrUpgradeHero(hId);
+          showToast(r.msg);
         };
-        const d = dirs[String(oct)];
-        if (d) { G.Game.stopAuto(); G.Game.stepPlayer(d[0], d[1]); }
-        return;
+        acts.appendChild(upBtn);
+      } else {
+        const unBtn = el('button', 'btn btn-teal btn-sm', `解放 💎${h.unlockCost}`);
+        unBtn.type = 'button';
+        unBtn.onclick = () => {
+          const r = G.Game.unlockOrUpgradeHero(hId);
+          showToast(r.msg);
+        };
+        acts.appendChild(unBtn);
       }
+      card.appendChild(acts);
+      list.appendChild(card);
+    }
 
-      const tile = G.Render.screenToTile(e.clientX, e.clientY);
-      if (tile) G.Game.handleTileTap(tile.x, tile.y);
-    });
+    // Equipped 4 slots
+    const slotsGrid = $('#gear-slots-grid');
+    slotsGrid.innerHTML = '';
+    for (const slot of Object.keys(G.GEAR_SLOTS)) {
+      const slotDef = G.GEAR_SLOTS[slot];
+      const item = G.Game.getGearItem(meta.equipped[slot]);
+      const card = el('div', 'gear-slot-card');
+      const iconUrl = G.Spr.dataURL('gear_' + slot);
 
-    // Action buttons
-    const avatarBtn = $('#hud-avatar');
-    if (avatarBtn) avatarBtn.addEventListener('click', () => { G.Audio.play('tap'); openRelicsModal(); });
-    $('#act-explore').addEventListener('click', () => { G.Audio.play('tap'); G.Game.autoExplore(); });
-    $('#act-wait').addEventListener('click', () => { G.Audio.play('tap'); G.Game.waitTurn(); });
-    $('#act-bag').addEventListener('click', () => { G.Audio.play('tap'); openBagModal(); });
-    $('#act-relics').addEventListener('click', () => { G.Audio.play('tap'); openRelicsModal(); });
-    $('#act-dpad').addEventListener('click', () => {
-      G.Audio.play('tap');
-      G.settings.dpad = !G.settings.dpad;
-      G.Game.saveSettings();
-      syncDpadVisibility();
-    });
-    $('#btn-stairs').addEventListener('click', () => { G.Audio.play('tap'); G.Game.descendStairs(); });
-    $('#btn-cancel-target').addEventListener('click', () => {
-      if (G.Game.state) { G.Game.state.targeting = null; G.Audio.play('tap'); renderHUD(G.Game.state); }
-    });
-    $('#btn-hud-menu').addEventListener('click', () => { G.Audio.play('tap'); openSettingsModal(true); });
-    $('#btn-hud-sound').addEventListener('click', () => {
-      G.settings.sfx = !G.settings.sfx;
-      G.settings.bgm = G.settings.sfx;
-      G.Game.saveSettings();
-      G.Audio.play('tap');
-      renderHUD(G.Game.state);
-    });
-    $('#mini-wrap').addEventListener('click', () => { G.Audio.play('tap'); openMapModal(); });
-    $('#log-preview').addEventListener('click', () => { G.Audio.play('tap'); openLogModal(); });
-
-    // 8-way D-pad buttons
-    document.querySelectorAll('#dpad-overlay [data-dir]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const [dx, dy] = btn.dataset.dir.split(',').map(Number);
-        G.Game.stopAuto();
-        if (dx === 0 && dy === 0) G.Game.waitTurn();
-        else G.Game.stepPlayer(dx, dy);
-      });
-    });
-
-    // Modal backdrop close (when dismissible)
-    $('#modal-backdrop').addEventListener('click', (e) => {
-      if (e.target === $('#modal-backdrop') && activeModal && activeModal.dismissible) {
-        closeModal();
+      if (item) {
+        const tpl = G.GEAR_TEMPLATES.find((t) => t.id === item.tplId) || { name: slotDef.name, perk: '' };
+        const rar = G.RARITIES[item.rarity] || G.RARITIES[1];
+        const val = G.Game.calcGearStat(item);
+        const upCost = Math.round(60 * Math.pow(1.38, item.lv - 1));
+        card.style.borderColor = rar.color;
+        card.innerHTML = `
+          <img class="gear-icon-img" src="${iconUrl}" alt="">
+          <div class="gear-slot-info">
+            <strong style="color:${rar.color}">[${rar.name}] ${tpl.name} +${item.lv}</strong>
+            <small>${slotDef.name} (+${val}) / ${tpl.perk}</small>
+          </div>
+          <button type="button" class="btn btn-gold btn-sm">強化 🪙${upCost}</button>
+        `;
+        card.querySelector('button').onclick = () => {
+          const r = G.Game.upgradeGear(item.uid);
+          if (!r.ok && r.msg) showToast(r.msg);
+          else showToast(`${tpl.name}を強化しました！`);
+        };
+      } else {
+        card.innerHTML = `
+          <img class="gear-icon-img" src="${iconUrl}" alt="" style="opacity:0.35">
+          <div class="gear-slot-info">
+            <strong>${slotDef.name}（未装着）</strong>
+            <small>${slotDef.desc}</small>
+          </div>
+        `;
       }
-    });
+      slotsGrid.appendChild(card);
+    }
+
+    // Gear Inventory
+    const invList = $('#gear-inventory-list');
+    invList.innerHTML = '';
+    const sorted = meta.inventory.slice().sort((a, b) => b.rarity - a.rarity || b.lv - a.lv);
+    for (const item of sorted) {
+      const tpl = G.GEAR_TEMPLATES.find((t) => t.id === item.tplId) || { name: '星霊装備', perk: '' };
+      const rar = G.RARITIES[item.rarity] || G.RARITIES[1];
+      const isEq = meta.equipped[item.slot] === item.uid;
+      const iconUrl = G.Spr.dataURL('gear_' + item.slot);
+
+      const card = el('div', 'gear-slot-card');
+      card.style.borderColor = isEq ? 'var(--gold)' : rar.color;
+      card.style.cursor = 'pointer';
+      card.innerHTML = `
+        <img class="gear-icon-img" src="${iconUrl}" alt="">
+        <div class="gear-slot-info">
+          <strong style="color:${rar.color}">[${rar.name}] ${tpl.name} Lv.${item.lv}</strong>
+          <small>${tpl.perk} ${isEq ? '（✦装着中）' : '（タップで装着）'}</small>
+        </div>
+      `;
+      card.onclick = () => {
+        G.Game.equipGear(item.uid);
+        showToast(`${tpl.name}を装着しました`);
+      };
+      invList.appendChild(card);
+    }
   }
 
-  function bindKeyboard() {
-    const MAP = {
-      ArrowUp: [0, -1], w: [0, -1], k: [0, -1],
-      ArrowDown: [0, 1], s: [0, 1], j: [0, 1],
-      ArrowLeft: [-1, 0], a: [-1, 0], h: [-1, 0],
-      ArrowRight: [1, 0], d: [1, 0], l: [1, 0],
-      q: [-1, -1], y: [-1, -1], e: [1, -1], u: [1, -1],
-      z: [-1, 1], b: [-1, 1], c: [1, 1], n: [1, 1],
-    };
-    window.addEventListener('keydown', (e) => {
-      if (screen !== 'game' || activeModal) return;
-      if (MAP[e.key]) {
-        e.preventDefault();
-        const [dx, dy] = MAP[e.key];
-        G.Game.stopAuto();
-        G.Game.stepPlayer(dx, dy);
-      } else if (e.key === ' ' || e.key === '.') {
-        e.preventDefault(); G.Game.waitTurn();
-      } else if (e.key === 'x') {
-        G.Game.autoExplore();
-      } else if (e.key === 'i') {
-        openBagModal();
-      } else if (e.key === 'Enter' || e.key === '>') {
-        G.Game.descendStairs();
-      } else if (e.key >= '1' && e.key <= '6') {
-        G.Game.selectOrCastSpell(Number(e.key) - 1);
-      } else if (e.key === 'Escape' && G.Game.state && G.Game.state.targeting) {
-        G.Game.state.targeting = null;
-        renderHUD(G.Game.state);
+  function renderSummonAndTalentsTab() {
+    const meta = G.Game.meta;
+    const leftPity = Math.max(1, 10 - (meta.pity || 0));
+    $('#gacha-pity-count').textContent = `あと ${leftPity} 回`;
+
+    const grid = $('#talent-grid');
+    grid.innerHTML = '';
+    for (const t of G.TALENTS) {
+      const lv = meta.talents[t.id] || 0;
+      const cost = G.Game.getTalentCost(t.id);
+      const isMax = lv >= t.maxLv;
+      const card = el('div', 'talent-card');
+      card.innerHTML = `
+        <div>
+          <div class="talent-head">
+            <span>${t.name}</span>
+            <span class="talent-lv">Lv.${lv}/${t.maxLv}</span>
+          </div>
+          <div class="talent-desc">${t.desc}</div>
+        </div>
+        <button type="button" class="btn ${isMax ? 'btn-outline' : 'btn-gold'} btn-sm" ${isMax ? 'disabled' : ''}>
+          ${isMax ? 'MAX到達' : `強化 🪙${cost}`}
+        </button>
+      `;
+      if (!isMax) {
+        card.querySelector('button').onclick = () => {
+          const r = G.Game.upgradeTalent(t.id);
+          if (r.msg) showToast(r.msg);
+        };
       }
-    });
+      grid.appendChild(card);
+    }
   }
 
-  function syncDpadVisibility() {
-    $('#dpad-overlay').classList.toggle('show', !!G.settings.dpad);
-    $('#act-dpad').classList.toggle('active', !!G.settings.dpad);
+  function renderCodexAndMissionsTab() {
+    const meta = G.Game.meta;
+
+    // Missions
+    const mList = $('#mission-list');
+    mList.innerHTML = '';
+    for (const m of G.MISSIONS) {
+      const cur = Math.min(m.goal, meta.stats[m.stat] || 0);
+      const done = cur >= m.goal;
+      const claimed = !!meta.claimedMissions[m.id];
+
+      const card = el('div', 'hero-card');
+      card.innerHTML = `
+        <div class="hero-card-body">
+          <div class="hero-card-title">
+            <span>${m.name}</span>
+            <small style="color:var(--cyan)">(${cur}/${m.goal})</small>
+          </div>
+          <div class="hero-card-sub">${m.desc}</div>
+        </div>
+      `;
+      const btn = el(
+        'button',
+        `btn ${claimed ? 'btn-outline' : done ? 'btn-gold' : 'btn-outline'} btn-sm`,
+        claimed ? '受取済' : `💎${m.gems} 受取`
+      );
+      btn.type = 'button';
+      btn.disabled = claimed || !done;
+      btn.onclick = () => {
+        const r = G.Game.claimMission(m.id);
+        if (r.ok) showToast(`実績報酬 💎${r.gems} を獲得しました！`);
+      };
+      card.appendChild(btn);
+      mList.appendChild(card);
+    }
+
+    // ★EVO Recipes & Compendium
+    const cList = $('#codex-evo-list');
+    cList.innerHTML = '';
+    for (const evoId of Object.keys(G.EVO_ORBS)) {
+      const eo = G.EVO_ORBS[evoId];
+      const baseOrb = G.ORBS[eo.baseId];
+      const cat = G.CATALYSTS[eo.catalyst];
+      const card = el('div', 'hero-card');
+      card.style.borderColor = 'rgba(244, 197, 99, 0.35)';
+      card.innerHTML = `
+        <img class="gear-icon-img" src="${G.Spr.dataURL(eo.icon)}" alt="${eo.name}" style="width:52px;height:52px">
+        <div class="hero-card-body">
+          <div class="hero-card-title" style="color:var(--gold)">${eo.name}</div>
+          <div class="hero-card-sub" style="color:var(--cyan)">
+            <strong>覚醒条件:</strong> ★3 ${baseOrb.name} ＋ ${cat.name}
+          </div>
+          <div class="hero-card-sub">${eo.desc}</div>
+        </div>
+      `;
+      cList.appendChild(card);
+    }
   }
 
-  /* ---------- HUD Update ---------- */
-  function onGameUpdate(st, event) {
+  /* =========================================================
+   *  2. BATTLE HUD & ORB MERGE RACK RENDERING
+   * ========================================================= */
+  function renderBattleHUD(st) {
     if (!st) return;
-    renderHUD(st);
-    if (event && event.type === 'end') {
-      openEndModal(event);
-      return;
-    }
-    if (!activeModal && st.modalQueue && st.modalQueue.length) {
-      const m = st.modalQueue.shift();
-      if (m.type === 'boon') openBoonModal(m.choices);
-      else if (m.type === 'shrine') openShrineModal(m.obj);
-      else if (m.type === 'merchant') openMerchantModal(m.obj);
-      else if (m.type === 'replaceSpell') openReplaceSpellModal(m.spellId, m.itemIdx);
-    }
-  }
+    const hero = G.HEROES[st.heroId] || G.HEROES.valen;
+    $('#b-hero-avatar').src = hero.portrait;
+    $('#b-wave-badge').textContent = `WAVE ${st.wave}/${st.maxWaves}`;
+    $('#b-gold-text').textContent = `🪙 ${G.fmtNum(st.runGold)}`;
+    $('#b-chapter-name').textContent = st.chapterName;
 
-  function renderHUD(st) {
-    if (!st) return;
-    const pl = st.player;
-    const biome = G.biomeFor(st.floor);
+    // Combo Banner
+    const comboStep = (st.perks.combo_amp ? 0.016 : 0.01) * st.comboBonus;
+    const mult = (1 + Math.min(2.5, st.combo * comboStep)).toFixed(2);
+    $('#combo-count').textContent = `${st.combo} HIT`;
+    $('#combo-mult').textContent = `ATK ×${mult}`;
 
-    const avatarImg = $('#hud-avatar-img');
-    if (avatarImg) {
-      const pUrl = classPortraitURL(st.cls);
-      if (avatarImg.getAttribute('src') !== pUrl) avatarImg.src = pUrl;
-    }
+    // Controls
+    $('#btn-speed').textContent = `${st.speed || 1}x`;
+    $('#btn-speed').classList.toggle('active', (st.speed || 1) > 1);
+    $('#btn-auto').classList.toggle('active', !!st.autoAim);
 
-    $('#hud-floor').textContent = `B${st.floor}F`;
-    $('#hud-biome').textContent = biome.name;
-    $('#hud-gold').textContent = pl.gold;
-    $('#hud-turn').textContent = `T${st.turn}`;
-    $('#btn-hud-sound').textContent = G.settings.sfx ? '♪' : '✕';
+    // Aim hint & Recall button
+    $('#aim-hint').style.display = st.phase === 'AIM' ? 'block' : 'none';
+    $('#btn-recall').style.display = st.phase === 'SHOOT' && st.flightTime >= 2.8 ? 'block' : 'none';
 
-    // Bars
-    const hpPct = Math.max(0, Math.min(100, (pl.hp / pl.maxHp) * 100));
-    const mpPct = Math.max(0, Math.min(100, (pl.mp / pl.maxMp) * 100));
-    const xpPct = Math.max(0, Math.min(100, (pl.xp / pl.nextXp) * 100));
-    $('#hp-fill').style.width = hpPct + '%';
-    $('#hp-text').textContent = `${pl.hp}/${pl.maxHp}` + (pl.shield > 0 ? ` (+${pl.shield})` : '');
-    $('#mp-fill').style.width = mpPct + '%';
-    $('#mp-text').textContent = `${pl.mp}/${pl.maxMp}`;
-    $('#xp-fill').style.width = xpPct + '%';
-    $('#lvl-badge').textContent = `Lv.${pl.lvl}`;
-    $('#stat-pow').textContent = pl.pow;
-    $('#stat-def').textContent = pl.def;
-    $('#bag-count').textContent = pl.items.length;
-
-    // Status pills
-    const pills = $('#status-pills');
-    pills.innerHTML = '';
-    if (pl.shield > 0) pills.appendChild(el('span', 'pill pill-shield', `障壁 ${pl.shield}`));
-    if (pl.timestop > 0) pills.appendChild(el('span', 'pill pill-time', `時止 ${pl.timestop}`));
-    if (pl.burn > 0) pills.appendChild(el('span', 'pill pill-burn', `燃焼 ${pl.burn}`));
-    if (pl.poison > 0) pills.appendChild(el('span', 'pill pill-poison', `毒 ${pl.poison}`));
-    if (pl.relics.length) pills.appendChild(el('span', 'pill pill-relic', `遺物 ${pl.relics.length}`));
-
-    // Boss HP bar
-    const boss = st.monsters.find((m) => m.boss && m.hp > 0 && !m.asleep);
-    const bossBar = $('#boss-bar');
+    // Boss HP Bar
+    const boss = st.enemies.find((m) => m.isBoss && m.hp > 0);
+    const bossBar = $('#boss-hud-bar');
     if (boss) {
       bossBar.style.display = 'flex';
-      const bImg = $('#boss-portrait-img');
-      if (bImg) {
-        const bUrl = bossPortraitURL(boss.type);
-        if (bImg.getAttribute('src') !== bUrl) bImg.src = bUrl;
-      }
-      $('#boss-name').textContent = boss.name + (boss.phase2 ? '【激怒】' : '');
-      $('#boss-hp-fill').style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
-      $('#boss-hp-val').textContent = `${boss.hp}/${boss.maxHp}`;
+      $('#boss-hud-img').src = boss.portrait;
+      $('#boss-hud-name').textContent = boss.name;
+      $('#boss-hud-hp').textContent = `${G.fmtNum(boss.hp + boss.shield)} / ${G.fmtNum(boss.maxHp)}`;
+      $('#boss-hp-fill').style.width = `${G.clamp((boss.hp / boss.maxHp) * 100, 0, 100)}%`;
     } else {
       bossBar.style.display = 'none';
     }
 
-    // Stairs button
-    const onStairs = st.level && st.level.tiles[pl.y * st.level.w + pl.x] === G.TILE.STAIRS;
-    $('#btn-stairs').style.display = onStairs ? 'flex' : 'none';
+    // Player HP / Shield / EXP Bars
+    const hpPct = G.clamp((st.hp / st.maxHp) * 100, 0, 100);
+    const shPct = G.clamp((st.shield / st.maxHp) * 100, 0, 100);
+    const xpPct = G.clamp((st.xp / Math.max(1, st.xpNext)) * 100, 0, 100);
+    $('#b-hp-fill').style.width = `${hpPct}%`;
+    $('#b-shield-fill').style.width = `${shPct}%`;
+    $('#b-hp-text').textContent = st.shield > 0
+      ? `${st.hp} (+${st.shield}) / ${st.maxHp}`
+      : `${st.hp} / ${st.maxHp}`;
+    $('#b-xp-fill').style.width = `${xpPct}%`;
+    $('#b-lv-text').textContent = `Lv.${st.lv}`;
 
-    // Targeting banner
-    const tBanner = $('#target-banner');
-    if (st.targeting) {
-      const S = G.SPELLS[st.targeting.spellId];
-      tBanner.style.display = 'flex';
-      $('#target-text').textContent = `「${S.name}」の標的をタップ` + (S.target === 'bolt' ? '（再度ボタンで自動照準）' : '');
-    } else {
-      tBanner.style.display = 'none';
-    }
+    const totalBalls = st.baseOrbs + st.rack.filter(Boolean).length + (st.catalysts.includes('cat_star') ? 3 : 0);
+    $('#b-balls-total').textContent = `装填 ${totalBalls}発`;
 
-    // Log preview (last 2 lines)
-    const lp = $('#log-preview');
-    lp.innerHTML = '';
-    for (const entry of st.log.slice(-2)) {
-      lp.appendChild(el('div', `log-line ${entry.cls || ''}`, entry.text));
-    }
+    // 6-Slot Orb Rack & Merge indicator
+    const pairs = G.Game.findMergePairs();
+    const mergeIndices = new Set();
+    pairs.forEach(([a, b]) => { mergeIndices.add(a); mergeIndices.add(b); });
 
-    // Spell hotbar
-    const bar = $('#spell-bar');
-    bar.innerHTML = '';
-    for (let i = 0; i < G.MAX_SPELLS; i++) {
-      const sp = pl.spells[i];
-      if (!sp) {
-        const empty = el('div', 'spell-slot empty', '<span class="slot-num">' + (i + 1) + '</span>');
-        bar.appendChild(empty);
-        continue;
+    const mergeBtn = $('#btn-rack-merge');
+    mergeBtn.style.display = pairs.length > 0 && st.phase === 'AIM' ? 'inline-block' : 'none';
+
+    const rackEl = $('#orb-rack');
+    rackEl.innerHTML = '';
+    for (let i = 0; i < 6; i++) {
+      const slot = st.rack[i];
+      const cell = el('div', 'rack-slot');
+      if (st.selectedRackSlot === i) cell.classList.add('selected');
+      if (mergeIndices.has(i)) cell.classList.add('merge-ready');
+      if (slot && slot.isEvo) cell.classList.add('evo-slot');
+
+      if (slot) {
+        const def = slot.isEvo ? G.EVO_ORBS[slot.id] : G.ORBS[slot.id];
+        const iconKey = def ? def.icon : 'orb_normal';
+        const badgeText = slot.isEvo ? '★EVO' : `★${slot.star}`;
+        cell.innerHTML = `
+          <img src="${G.Spr.dataURL(iconKey)}" alt="">
+          <span class="rack-star-badge">${badgeText}</span>
+        `;
       }
-      const def = G.SPELLS[sp.id];
-      const cost = G.Game.actualSpellCost(sp.id, sp.lv);
-      const can = G.Game.canAffordSpell(sp.id, sp.lv);
-      const isTargeting = st.targeting && st.targeting.slotIdx === i;
-      const btn = el('button', 'spell-slot' + (isTargeting ? ' targeting' : '') + (!can ? ' dim' : ''));
-      btn.type = 'button';
-      const stars = '★'.repeat(sp.lv + 1) + '☆'.repeat(2 - sp.lv);
-      btn.innerHTML = `
-        <span class="mp-badge">${cost}</span>
-        <img src="${G.Spr.iconURL(sp.id)}" alt="">
-        <span class="sp-name">${def.name}</span>
-        <span class="sp-stars">${stars}</span>
-      `;
-      let pressTimer = null, longPressed = false;
-      btn.addEventListener('pointerdown', () => {
-        longPressed = false;
-        pressTimer = setTimeout(() => {
-          longPressed = true;
-          openSpellInfoModal(sp);
-        }, 420);
-      });
-      btn.addEventListener('pointerup', () => { clearTimeout(pressTimer); });
-      btn.addEventListener('pointerleave', () => { clearTimeout(pressTimer); });
-      btn.addEventListener('click', () => {
-        if (!longPressed) G.Game.selectOrCastSpell(i);
-      });
-      bar.appendChild(btn);
+      cell.onclick = () => onRackSlotClick(i);
+      rackEl.appendChild(cell);
     }
 
-    syncDpadVisibility();
+    // Ultimate Button
+    const ultPct = Math.min(100, Math.floor((st.ultCharge / st.ultMax) * 100));
+    const ultBtn = $('#btn-ult');
+    $('#ult-btn-img').src = hero.portrait;
+    $('#ult-pct-badge').textContent = ultPct >= 100 ? 'READY!' : `${ultPct}%`;
+    ultBtn.classList.toggle('ready', ultPct >= 100);
   }
 
-  /* ---------- Modals ---------- */
-  function openModal(title, bodyNode, opts = {}) {
-    const back = $('#modal-backdrop');
+  function onRackSlotClick(idx) {
+    const st = G.Game.state;
+    if (!st || st.phase !== 'AIM') return;
+    const clicked = st.rack[idx];
+
+    if (st.selectedRackSlot !== null && st.selectedRackSlot !== idx) {
+      const prevIdx = st.selectedRackSlot;
+      const prev = st.rack[prevIdx];
+      if (prev && clicked && !prev.isEvo && !clicked.isEvo && prev.id === clicked.id && prev.star === clicked.star && prev.star < 3) {
+        const res = G.Game.mergeRackSlots(prevIdx, idx);
+        if (res.ok) {
+          const def = G.ORBS[prev.id];
+          showToast(res.evoTriggered ? '★神話覚醒（EVO）達成！' : `★${prev.star} ${def.name} に合成進化！`);
+        }
+        return;
+      }
+      // Or swap slot positions so player can customize firing order!
+      st.rack[prevIdx] = clicked;
+      st.rack[idx] = prev;
+      st.selectedRackSlot = null;
+      G.Audio.play('tap');
+      renderBattleHUD(st);
+      return;
+    }
+
+    if (!clicked) {
+      st.selectedRackSlot = null;
+      renderBattleHUD(st);
+      return;
+    }
+
+    st.selectedRackSlot = st.selectedRackSlot === idx ? null : idx;
+    const def = clicked.isEvo ? G.EVO_ORBS[clicked.id] : G.ORBS[clicked.id];
+    if (def) {
+      const desc = typeof def.desc === 'function' ? def.desc(clicked.star) : def.desc;
+      showToast(`${clicked.isEvo ? '' : '★' + clicked.star + ' '}${def.name}: ${desc}`);
+    }
+    G.Audio.play('tap');
+    renderBattleHUD(st);
+  }
+
+  function triggerUltCutIn(hero) {
+    const box = $('#ult-cutin');
+    if (!box) return;
+    $('#ult-cutin-img').src = hero.portrait;
+    $('#ult-cutin-hero').textContent = `${hero.name} 奥義発動！`;
+    $('#ult-cutin-name').textContent = hero.ultName;
+    box.style.display = 'flex';
+    setTimeout(() => {
+      box.style.display = 'none';
+    }, 1350);
+  }
+
+  /* =========================================================
+   *  3. MODALS: 3-CHOICE DRAFT, ENCOUNTERS, GACHA, RESULTS
+   * ========================================================= */
+  function openModal(title, htmlBuilder, lockClose = false) {
+    modalLocked = lockClose;
     $('#modal-title').textContent = title;
+    $('#modal-close').style.display = lockClose ? 'none' : 'inline-flex';
     const body = $('#modal-body');
     body.innerHTML = '';
-    body.appendChild(bodyNode);
-    const closeBtn = $('#modal-close');
-    const dismissible = opts.dismissible !== false;
-    closeBtn.style.display = dismissible ? 'flex' : 'none';
-    closeBtn.onclick = closeModal;
-    activeModal = { dismissible, onClose: opts.onClose };
-    back.classList.add('open');
     body.scrollTop = 0;
+    htmlBuilder(body);
+    $('#modal-backdrop').classList.add('active');
   }
 
   function closeModal() {
-    $('#modal-backdrop').classList.remove('open');
-    const cb = activeModal && activeModal.onClose;
-    activeModal = null;
-    if (cb) cb();
-    // Check queued modals
+    modalLocked = false;
+    $('#modal-backdrop').classList.remove('active');
+  }
+
+  function openDraftModal(choices) {
     const st = G.Game.state;
-    if (st && !st.over && st.modalQueue && st.modalQueue.length) {
-      onGameUpdate(st);
-    }
-  }
+    openModal(`✦ LEVEL UP! 星霊スキル選択 (Lv.${st.lv})`, (body) => {
+      const sub = el('p', '', '3つの祝福から1つを選択（同種星霊弾は自動合成、★3＋触媒で神話覚醒！）');
+      sub.style.fontSize = '12px';
+      sub.style.color = 'var(--text-sub)';
+      body.appendChild(sub);
 
-  /* Class Selection */
-  function openClassModal() {
-    const meta = G.Game.loadMeta();
-    const wrap = el('div', 'class-list');
-    for (const id of G.CLASS_ORDER) {
-      const C = G.CLASSES[id];
-      const unlocked = meta.unlocked.includes(id);
-      const spImg = G.Spr.spriteURL(G.Spr.playerSprite(id));
-      const pImg = classPortraitURL(id);
-      const card = el('div', 'fantasy-card class-card' + (unlocked ? '' : ' locked'));
-      const spellTags = C.spells.map((sid) => `<span class="tag">${G.SPELLS[sid].name}</span>`).join('');
-      card.innerHTML = `
-        <div class="cc-top">
-          <div class="cc-portrait-wrap">
-            <img src="${pImg}" class="cc-portrait" alt="${C.name}">
-            <img src="${spImg}" class="cc-mini-sprite" alt="">
-            ${unlocked ? '' : '<span class="cc-lock-badge">🔒</span>'}
+      for (const ch of choices) {
+        const card = el('button', `draft-card ${ch.rarity || ''}`);
+        card.type = 'button';
+        card.innerHTML = `
+          <img class="draft-icon" src="${G.Spr.dataURL(ch.icon)}" alt="">
+          <div class="draft-info">
+            <span class="draft-badge">${ch.badge}</span>
+            <div class="draft-name">${ch.name}</div>
+            <div class="draft-desc">${ch.desc}</div>
           </div>
-          <div class="cc-info">
-            <div class="cc-name">${C.name} <small>${C.en}</small></div>
-            <div class="cc-stats">HP ${C.hp} / MP ${C.mp} / 魔力 ${C.pow} / 防御 ${C.def}</div>
-            <div class="cc-tags">${spellTags}</div>
-          </div>
-        </div>
-        <div class="cc-desc">${C.desc}</div>
-        <div class="cc-passive">${C.passive}</div>
-      `;
-      const btn = el('button', 'btn ' + (unlocked ? 'btn-gold' : 'btn-outline'));
-      if (unlocked) {
-        btn.textContent = 'この術士で挑む';
-        btn.onclick = () => {
-          G.Audio.play('tap');
+        `;
+        card.onclick = () => {
           closeModal();
-          G.Game.startNewRun(id);
-          showScreen('game');
+          G.Game.applyDraftChoice(ch);
         };
-      } else {
-        btn.innerHTML = `星屑 ${C.cost} で解放（所持: ${meta.dust}）`;
-        btn.disabled = meta.dust < C.cost;
-        btn.onclick = () => {
-          const m = G.Game.loadMeta();
-          if (m.dust >= C.cost && !m.unlocked.includes(id)) {
-            m.dust -= C.cost;
-            m.unlocked.push(id);
-            G.Game.saveMeta(m);
-            G.Audio.play('levelup');
-            openClassModal();
-            refreshTitle();
-          }
-        };
+        body.appendChild(card);
       }
-      card.appendChild(btn);
-      wrap.appendChild(card);
-    }
-    openModal('魔導士の選択', wrap);
+
+      if (st.rerolls > 0) {
+        const rerollBtn = el('button', 'btn btn-outline btn-block', `🎲 選択肢を再抽選する（残り ${st.rerolls} 回）`);
+        rerollBtn.type = 'button';
+        rerollBtn.onclick = () => {
+          st.rerolls--;
+          G.Audio.play('tap');
+          openDraftModal(G.Game.rollDraftChoices());
+        };
+        body.appendChild(rerollBtn);
+      }
+    }, true);
   }
 
-  /* Sanctuary (Meta Upgrades) */
-  function openSanctuaryModal() {
-    const meta = G.Game.loadMeta();
-    const wrap = el('div', 'sanctuary-wrap');
-    wrap.appendChild(el('div', 'dust-banner', `✦ 所持している星屑: <strong>${meta.dust}</strong>`));
-    for (const id of Object.keys(G.META)) {
-      const M = G.META[id];
-      const lv = meta.upgrades[id] || 0;
-      const maxed = lv >= M.max;
-      const cost = maxed ? 0 : M.cost(lv);
-      const row = el('div', 'fantasy-card meta-row');
-      row.innerHTML = `
-        <div class="meta-info">
-          <div class="meta-name">${M.name} <span class="lv-tag">Lv.${lv}/${M.max}</span></div>
-          <div class="meta-desc">${M.desc}</div>
-        </div>
-      `;
-      const btn = el('button', 'btn ' + (maxed ? 'btn-disabled' : 'btn-gold'));
-      btn.textContent = maxed ? '極み' : `✦ ${cost}`;
-      btn.disabled = maxed || meta.dust < cost;
-      btn.onclick = () => {
-        const m = G.Game.loadMeta();
-        const cur = m.upgrades[id] || 0;
-        const c = M.cost(cur);
-        if (cur < M.max && m.dust >= c) {
-          m.dust -= c;
-          m.upgrades[id] = cur + 1;
-          G.Game.saveMeta(m);
-          G.Audio.play('levelup');
-          openSanctuaryModal();
-          refreshTitle();
+  function openEncounterModal(kind) {
+    const st = G.Game.state;
+    if (!st) return;
+
+    if (kind === 'merchant') {
+      openModal('🦊 星霊商会の旅商人', (body) => {
+        const banner = el('img', 'modal-scene-banner');
+        banner.src = './assets/portraits/scene_merchant.webp';
+        banner.alt = '旅商人';
+        body.appendChild(banner);
+
+        const pickOrbId = st.rng.pick(G.ORB_IDS);
+        const orbDef = G.ORBS[pickOrbId];
+        const options = [
+          {
+            name: `★2 ${orbDef.name} を購入`,
+            desc: '即座に★2強化済みの星霊弾をラックへ装填・合成する',
+            cost: 40,
+            icon: orbDef.icon,
+            action: () => G.Game.addOrbToRack(pickOrbId, 2),
+          },
+          {
+            name: '星女神の霊薬（HP全回復＋バリア）',
+            desc: 'HPを100%回復し、最大HP25%分のシールドを展開する',
+            cost: 30,
+            icon: 'heal_gem',
+            action: () => {
+              st.hp = st.maxHp;
+              st.shield += Math.round(st.maxHp * 0.25);
+            },
+          },
+          {
+            name: '星霊の秘伝訓練（攻撃力+20%＆弾数+2）',
+            desc: 'この作戦中の基礎攻撃力+20%、通常弾数+2発',
+            cost: 45,
+            icon: 'multiball',
+            action: () => {
+              st.atk = Math.round(st.atk * 1.2);
+              st.baseOrbs += 2;
+            },
+          },
+        ];
+
+        for (const opt of options) {
+          const canBuy = st.runGold >= opt.cost;
+          const card = el('button', 'draft-card');
+          card.type = 'button';
+          card.innerHTML = `
+            <img class="draft-icon" src="${G.Spr.dataURL(opt.icon)}" alt="">
+            <div class="draft-info">
+              <span class="draft-badge">所持金貨 🪙${st.runGold}</span>
+              <div class="draft-name">${opt.name}（🪙${opt.cost}）</div>
+              <div class="draft-desc">${opt.desc}</div>
+            </div>
+          `;
+          card.onclick = () => {
+            if (st.runGold < opt.cost) {
+              showToast('作戦中の金貨が足りません');
+              return;
+            }
+            st.runGold -= opt.cost;
+            opt.action();
+            G.Game.autoMergeRack();
+            G.Audio.play('coin');
+            closeModal();
+            renderBattleHUD(st);
+          };
+          body.appendChild(card);
         }
-      };
-      row.appendChild(btn);
-      wrap.appendChild(row);
-    }
-    openModal('星詠みの聖域（恒久強化）', wrap);
-  }
 
-  /* Boon Draft */
-  function openBoonModal(choices) {
-    const wrap = el('div', 'boon-list');
-    wrap.appendChild(el('p', 'modal-lead', '星の祝福を1つ選んでください：'));
-    for (const id of choices) {
-      const B = G.BOONS[id];
-      const card = el('button', 'fantasy-card boon-card');
-      card.innerHTML = `
-        <img src="${G.Spr.iconURL(B.icon)}" class="boon-icon" alt="">
-        <div class="boon-text">
-          <div class="boon-name">${B.name}</div>
-          <div class="boon-desc">${B.desc}</div>
-        </div>
-      `;
-      card.onclick = () => {
-        closeModal();
-        G.Game.applyBoon(id);
-      };
-      wrap.appendChild(card);
-    }
-    openModal('レベルアップの祝福', wrap, { dismissible: false });
-  }
-
-  /* Bag Modal */
-  function openBagModal() {
-    const st = G.Game.state;
-    if (!st) return;
-    const pl = st.player;
-    const wrap = el('div', 'bag-wrap');
-    if (!pl.items.length) {
-      wrap.appendChild(el('p', 'modal-lead', '持ち物は空だ。'));
-    } else {
-      pl.items.forEach((it, idx) => {
-        const def = G.ITEMS[it.id];
-        const desc = it.id === 'tome' && it.spell
-          ? `【${G.SPELLS[it.spell].name}】の魔導書。${G.SPELLS[it.spell].desc(0, G.SPELLS[it.spell])}`
-          : def.desc;
-        const row = el('div', 'fantasy-card item-row');
-        row.innerHTML = `
-          <img src="${G.Spr.iconURL(def.icon)}" class="item-icon" alt="">
-          <div class="item-info">
-            <div class="item-name">${def.name}${it.spell ? `〈${G.SPELLS[it.spell].name}〉` : ''}</div>
-            <div class="item-desc">${desc}</div>
-          </div>
-        `;
-        const btns = el('div', 'item-actions');
-        const useBtn = el('button', 'btn btn-gold btn-sm', '使う');
-        useBtn.onclick = () => {
+        const skipBtn = el('button', 'btn btn-teal btn-block', '見送って次のWAVEへ進む（＋🪙25 獲得）');
+        skipBtn.type = 'button';
+        skipBtn.onclick = () => {
+          st.runGold += 25;
+          G.Audio.play('coin');
           closeModal();
-          G.Game.useItem(idx);
+          renderBattleHUD(st);
         };
-        const dropBtn = el('button', 'btn btn-outline btn-sm', '捨てる');
-        dropBtn.onclick = () => {
-          pl.items.splice(idx, 1);
-          G.Audio.play('tap');
-          openBagModal();
-          renderHUD(st);
-        };
-        btns.appendChild(useBtn);
-        btns.appendChild(dropBtn);
-        row.appendChild(btns);
-        wrap.appendChild(row);
-      });
-    }
-    openModal(`持ち物 (${pl.items.length}/${G.MAX_ITEMS})`, wrap);
-  }
-
-  /* Replace Spell Modal */
-  function openReplaceSpellModal(newSpellId, itemIdx) {
-    const st = G.Game.state;
-    const S = G.SPELLS[newSpellId];
-    const wrap = el('div', 'boon-list');
-    wrap.appendChild(el('p', 'modal-lead', `呪文スロットが満杯です。「${S.name}」を覚えるには忘れる呪文を選んでください：`));
-    st.player.spells.forEach((sp, i) => {
-      const def = G.SPELLS[sp.id];
-      const card = el('button', 'fantasy-card boon-card');
-      card.innerHTML = `
-        <img src="${G.Spr.iconURL(sp.id)}" class="boon-icon" alt="">
-        <div class="boon-text">
-          <div class="boon-name">${def.name} (Lv.${sp.lv + 1})</div>
-          <div class="boon-desc">${def.desc(sp.lv, def)}</div>
-        </div>
-      `;
-      card.onclick = () => {
-        closeModal();
-        G.Game.replaceSpellSlot(i, newSpellId, itemIdx);
-      };
-      wrap.appendChild(card);
-    });
-    const cancel = el('button', 'btn btn-outline', '習得をやめる');
-    cancel.onclick = closeModal;
-    wrap.appendChild(cancel);
-    openModal('呪文の入れ替え', wrap, { dismissible: false });
-  }
-
-  /* Shrine Modal */
-  function openShrineModal(obj) {
-    const st = G.Game.state;
-    const wrap = el('div', 'boon-list');
-    const banner = el('div', 'scene-banner', `
-      ${shrineBannerSVG()}
-      <div class="scene-banner-cap">
-        <span>古代の祭壇が静かに輝いている</span>
-        <span class="hud-gold">金貨 <strong>${st.player.gold}G</strong></span>
-      </div>
-    `);
-    wrap.appendChild(banner);
-    obj.offers.forEach((off, i) => {
-      const def = G.SHRINES.find((s) => s.id === off.id);
-      const card = el('button', 'fantasy-card boon-card');
-      card.innerHTML = `
-        <div class="boon-text">
-          <div class="boon-name">${def.name}</div>
-          <div class="boon-desc">${G.fmt(def.desc, { cost: off.cost })}</div>
-        </div>
-      `;
-      card.onclick = () => {
-        closeModal();
-        G.Game.useShrine(obj, i);
-      };
-      wrap.appendChild(card);
-    });
-    openModal('星の祭壇', wrap);
-  }
-
-  /* Merchant Modal */
-  function openMerchantModal(obj) {
-    const st = G.Game.state;
-    const wrap = el('div', 'bag-wrap');
-    const banner = el('div', 'scene-banner', `
-      <img src="./assets/portraits/scene_merchant.webp" alt="旅の行商人">
-      <div class="scene-banner-cap">
-        <span>旅の行商人「いい品があるぞ」</span>
-        <span class="hud-gold">金貨 <strong>${st.player.gold}G</strong></span>
-      </div>
-    `);
-    wrap.appendChild(banner);
-    let remaining = 0;
-    obj.stock.forEach((entry, i) => {
-      if (entry.sold) return;
-      remaining++;
-      const isRelic = !!entry.relic;
-      const name = isRelic ? `【遺物】${G.RELICS[entry.relic].name}` : G.ITEMS[entry.item.id].name + (entry.item.spell ? `〈${G.SPELLS[entry.item.spell].name}〉` : '');
-      const desc = isRelic ? G.RELICS[entry.relic].desc : (entry.item.spell ? G.SPELLS[entry.item.spell].desc(0, G.SPELLS[entry.item.spell]) : G.ITEMS[entry.item.id].desc);
-      const iconKey = isRelic ? G.RELICS[entry.relic].icon : G.ITEMS[entry.item.id].icon;
-      const row = el('div', 'fantasy-card item-row');
-      row.innerHTML = `
-        <img src="${G.Spr.iconURL(iconKey)}" class="item-icon" alt="">
-        <div class="item-info">
-          <div class="item-name">${name}</div>
-          <div class="item-desc">${desc}</div>
-        </div>
-      `;
-      const btn = el('button', 'btn btn-gold btn-sm', `${entry.price}G`);
-      btn.disabled = st.player.gold < entry.price;
-      btn.onclick = () => {
-        G.Game.buyFromMerchant(obj, i);
-        openMerchantModal(obj);
-      };
-      row.appendChild(btn);
-      wrap.appendChild(row);
-    });
-    if (remaining === 0) {
-      wrap.appendChild(el('p', 'modal-lead', '「ふむ、これで品物は全部だ。また地下のどこかで会おう！」'));
-    }
-    openModal('旅の行商人', wrap);
-  }
-
-  /* Relics & Status Inspector */
-  function openRelicsModal() {
-    const st = G.Game.state;
-    if (!st) return;
-    const pl = st.player;
-    const C = G.CLASSES[st.cls];
-    const wrap = el('div', 'bag-wrap');
-    wrap.appendChild(el('div', 'fantasy-card status-hero', `
-      <img src="${classPortraitURL(st.cls)}" class="status-portrait" alt="${C.name}">
-      <div class="item-info">
-        <div class="item-name">${C.name} Lv.${pl.lvl}</div>
-        <div class="cc-stats" style="margin-top:3px">HP ${pl.hp}/${pl.maxHp} ・ MP ${pl.mp}/${pl.maxMp}</div>
-        <div class="cc-stats">魔力 ${pl.pow} ・ 防御 ${pl.def} ・ 討伐 ${st.kills}</div>
-        <div class="item-desc" style="margin-top:4px;color:var(--gold)">${C.passive}</div>
-      </div>
-    `));
-    if (!pl.relics.length) {
-      wrap.appendChild(el('p', 'modal-lead', 'まだ遺物を所持していない。宝箱やボスから手に入れよう。'));
+        body.appendChild(skipBtn);
+      }, true);
     } else {
-      for (const id of pl.relics) {
-        const R = G.RELICS[id];
-        const row = el('div', 'fantasy-card item-row');
-        row.innerHTML = `
-          <img src="${G.Spr.iconURL(R.icon)}" class="item-icon" alt="">
-          <div class="item-info">
-            <div class="item-name">${R.name}</div>
-            <div class="item-desc">${R.desc}</div>
+      // Shrine / Blessing of Lunaria or Blacksmith
+      openModal('❄️ 氷晶の巫女ルナリアの祝福祭壇', (body) => {
+        const banner = el('img', 'modal-scene-banner');
+        banner.src = './assets/portraits/class_cryo.webp';
+        banner.alt = '氷晶の巫女';
+        body.appendChild(banner);
+
+        const options = [
+          {
+            badge: '★星鉄鍛冶の秘術',
+            name: '装填ラック内の星霊弾を1段階ランクアップ！',
+            desc: '先頭の星霊弾の★ランクを+1上昇（★3到達時に触媒があれば★EVO覚醒！）',
+            icon: 'orb_holy',
+            fn: () => {
+              const slot = st.rack.find((s) => s && !s.isEvo && s.star < 3);
+              if (slot) {
+                slot.star += 1;
+                G.Game.checkAutoEvoInRack();
+              } else {
+                st.atk = Math.round(st.atk * 1.25);
+              }
+              G.Audio.play('evo');
+            },
+          },
+          {
+            badge: '✦ 星脈の奔流',
+            name: '奥義ゲージ100%満タン＋通常弾+3発',
+            desc: '即座に奥義が発動可能になり、一斉発射数が3発増える',
+            icon: 'ult_overdrive',
+            fn: () => {
+              st.ultCharge = st.ultMax;
+              st.baseOrbs += 3;
+              G.Audio.play('levelup');
+            },
+          },
+        ];
+
+        for (const opt of options) {
+          const card = el('button', 'draft-card epic');
+          card.type = 'button';
+          card.innerHTML = `
+            <img class="draft-icon" src="${G.Spr.dataURL(opt.icon)}" alt="">
+            <div class="draft-info">
+              <span class="draft-badge">${opt.badge}</span>
+              <div class="draft-name">${opt.name}</div>
+              <div class="draft-desc">${opt.desc}</div>
+            </div>
+          `;
+          card.onclick = () => {
+            opt.fn();
+            closeModal();
+            renderBattleHUD(st);
+          };
+          body.appendChild(card);
+        }
+      }, true);
+    }
+  }
+
+  function openGachaResultsModal(items) {
+    openModal(`✨ 星霊遺物召喚 結果（${items.length}連）`, (body) => {
+      const grid = el('div', 'gacha-results-grid');
+      for (const it of items) {
+        const tpl = G.GEAR_TEMPLATES.find((t) => t.id === it.tplId) || { name: '星霊装備', perk: '' };
+        const rar = G.RARITIES[it.rarity] || G.RARITIES[1];
+        const cell = el('div', 'gacha-result-item');
+        cell.style.borderColor = rar.color;
+        cell.innerHTML = `
+          <img class="gear-icon-img" src="${G.Spr.dataURL('gear_' + it.slot)}" alt="">
+          <div class="gear-slot-info">
+            <strong style="color:${rar.color}">[${rar.name}] ${tpl.name}</strong>
+            <small>${tpl.perk}</small>
           </div>
         `;
-        wrap.appendChild(row);
+        grid.appendChild(cell);
       }
-    }
-    openModal('術士ステータス・遺物', wrap);
+      body.appendChild(grid);
+
+      const closeBtn = el('button', 'btn btn-gold btn-block', '確認して閉じる');
+      closeBtn.type = 'button';
+      closeBtn.onclick = () => {
+        closeModal();
+        renderHub();
+      };
+      body.appendChild(closeBtn);
+    });
   }
 
-  function openSpellInfoModal(sp) {
-    const def = G.SPELLS[sp.id];
-    const cost = G.Game.actualSpellCost(sp.id, sp.lv);
-    const wrap = el('div', 'bag-wrap');
-    wrap.appendChild(el('div', 'fantasy-card', `
-      <div style="display:flex;gap:12px;align-items:center">
-        <img src="${G.Spr.iconURL(sp.id)}" class="item-icon" alt="">
-        <div>
-          <div class="item-name">${def.name} (Lv.${sp.lv + 1}/3)</div>
-          <div class="cc-stats">属性: ${G.ELEM[def.elem].name} / 消費MP: ${cost}</div>
+  function openBattleEndModal(ev) {
+    const st = G.Game.state;
+    const hero = G.HEROES[st.heroId] || G.HEROES.valen;
+    const title = ev.victory ? '★ CHAPTER CLEAR — 作戦完全制覇！ ★' : '作戦終了 — 戦果報告';
+    openModal(title, (body) => {
+      const banner = el('img', 'modal-scene-banner');
+      banner.src = hero.portrait;
+      banner.alt = hero.name;
+      body.appendChild(banner);
+
+      const box = el('div', 'chapter-card');
+      box.innerHTML = `
+        <h3 style="color:${ev.victory ? 'var(--gold)' : 'var(--cyan)'};text-align:center;font-size:17px">
+          ${ev.victory ? `${st.chapterName} を完全制覇！` : `到達: WAVE ${st.wave}/${st.maxWaves}`}
+        </h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+          <div class="res-pill"><span>獲得金貨:</span> <strong style="color:var(--gold)">+🪙${G.fmtNum(ev.gold)}</strong></div>
+          <div class="res-pill"><span>獲得星晶石:</span> <strong style="color:var(--cyan)">+💎${G.fmtNum(ev.gems)}</strong></div>
+          <div class="res-pill"><span>最大コンボ:</span> <strong>${st.maxRunCombo} HIT</strong></div>
+          <div class="res-pill"><span>撃破魔物数:</span> <strong>${st.kills} 体</strong></div>
         </div>
-      </div>
-      <p style="margin-top:10px;line-height:1.5">${def.desc(sp.lv, def)}</p>
-    `));
-    openModal('呪文の詳細', wrap);
-  }
+      `;
+      body.appendChild(box);
 
-  function openMonsterInfoModal(m) {
-    const def = G.MONSTERS[m.type];
-    const sp = G.Spr.s[m.sprite];
-    const resList = [];
-    if (def.resist) {
-      for (const [k, v] of Object.entries(def.resist)) {
-        const ename = (G.ELEM[k] && G.ELEM[k].name) || k;
-        if (v === 0) resList.push(`${ename}:無効`);
-        else if (v < 1) resList.push(`${ename}:耐性`);
-        else if (v > 1) resList.push(`${ename}:弱点`);
+      if (ev.victory && st.chapterId < G.CHAPTERS.length) {
+        const nextBtn = el('button', 'btn btn-gold btn-block', `✦ 次の章（第${st.chapterId + 1}章）へ進む`);
+        nextBtn.type = 'button';
+        nextBtn.onclick = () => {
+          closeModal();
+          G.Game.meta.selectedChapter = st.chapterId + 1;
+          G.Game.saveMeta();
+          switchScreen('hub');
+        };
+        body.appendChild(nextBtn);
       }
-    }
-    const states = [];
-    if (m.asleep) states.push('睡眠中');
-    if (m.frozen > 0) states.push(`凍結(${m.frozen})`);
-    if ((m.chill || 0) > 0) states.push(`冷気(${m.chill})`);
-    if (m.burn > 0) states.push(`燃焼(${m.burn})`);
-    if (m.poison > 0) states.push(`毒(${m.poison})`);
-    const imgHtml = m.boss
-      ? `<img src="${bossPortraitURL(m.type)}" class="monster-portrait" alt="${m.name}">`
-      : `<img src="${G.Spr.spriteURL(sp)}" class="item-icon" style="width:54px;height:54px" alt="">`;
-    const wrap = el('div', 'bag-wrap');
-    wrap.appendChild(el('div', 'fantasy-card', `
-      <div style="display:flex;gap:12px;align-items:center">
-        ${imgHtml}
-        <div class="item-info">
-          <div class="item-name">${m.name}${m.boss ? ' ★BOSS' : ''}</div>
-          <div class="cc-stats">HP ${m.hp}/${m.maxHp} ・ 攻撃 ${m.atk[0]}-${m.atk[1]} ・ 防御 ${m.def}</div>
-        </div>
-      </div>
-      <div class="item-desc" style="margin-top:8px">
-        状態: ${states.length ? states.join(' / ') : '通常'}
-        ${resList.length ? '<br>属性相性: ' + resList.join(' / ') : ''}
-      </div>
-    `));
-    openModal('魔物の情報', wrap);
+
+      const retryBtn = el('button', 'btn btn-teal btn-block', '🔄 もう一度この章に出撃する');
+      retryBtn.type = 'button';
+      retryBtn.onclick = () => {
+        closeModal();
+        G.Game.startBattle(st.chapterId);
+      };
+      body.appendChild(retryBtn);
+
+      const hubBtn = el('button', 'btn btn-outline btn-block', '🏠 ホーム画面へ戻って強化・ガチャ');
+      hubBtn.type = 'button';
+      hubBtn.onclick = () => {
+        closeModal();
+        switchScreen('hub');
+      };
+      body.appendChild(hubBtn);
+    }, true);
   }
 
-  /* Expanded Map Modal */
-  function openMapModal() {
+  function openPauseModal() {
     const st = G.Game.state;
     if (!st) return;
-    const wrap = el('div', 'map-modal-wrap');
-    const c = document.createElement('canvas');
-    c.width = 280; c.height = 280;
-    c.className = 'big-map';
-    G.Render.drawMini(st, c.getContext('2d'), c);
-    wrap.appendChild(c);
-    wrap.appendChild(el('p', 'modal-lead', '水色:現在地 / 金:階段・宝箱 / 赤:敵 / 青:祭壇 / 緑:商人'));
-    openModal(`B${st.floor}F 地図`, wrap);
+    openModal('⏸ 作戦一時停止メニュー', (body) => {
+      const info = el('p', '', `${st.chapterName} — WAVE ${st.wave}/${st.maxWaves}`);
+      info.style.color = 'var(--text-sub)';
+      body.appendChild(info);
+
+      const resumeBtn = el('button', 'btn btn-gold btn-block', '▶ バトルに戻る');
+      resumeBtn.type = 'button';
+      resumeBtn.onclick = () => closeModal();
+      body.appendChild(resumeBtn);
+
+      const saveHubBtn = el('button', 'btn btn-teal btn-block', '🏠 中断セーブしてホームへ戻る');
+      saveHubBtn.type = 'button';
+      saveHubBtn.onclick = () => {
+        closeModal();
+        switchScreen('hub');
+      };
+      body.appendChild(saveHubBtn);
+
+      const retireBtn = el('button', 'btn btn-outline btn-block', '🏳️ 戦果を受け取って撤退する');
+      retireBtn.type = 'button';
+      retireBtn.onclick = () => {
+        closeModal();
+        G.Game.finishBattle(false);
+      };
+      body.appendChild(retireBtn);
+    });
   }
 
-  /* Full Log Modal */
-  function openLogModal() {
-    const st = G.Game.state;
-    if (!st) return;
-    const wrap = el('div', 'full-log');
-    for (const entry of st.log.slice().reverse()) {
-      wrap.appendChild(el('div', `log-line ${entry.cls || ''}`, `[T${entry.turn}] ${entry.text}`));
-    }
-    openModal('冒険の記録', wrap);
-  }
+  /* =========================================================
+   *  4. INPUT BINDINGS (TOUCH AIMING, BUTTONS, KEYBOARD)
+   * ========================================================= */
+  function bindEvents() {
+    // Unlock audio on first pointer or key interaction
+    const unlock = () => G.Audio.unlock();
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
 
-  /* Settings / Pause Modal */
-  function openSettingsModal(inGame) {
-    const wrap = el('div', 'bag-wrap');
-    const mkToggle = (label, key) => {
-      const row = el('div', 'fantasy-card setting-row');
-      row.innerHTML = `<span>${label}</span>`;
-      const btn = el('button', 'btn btn-sm ' + (G.settings[key] ? 'btn-gold' : 'btn-outline'), G.settings[key] ? 'ON' : 'OFF');
-      btn.onclick = () => {
-        G.settings[key] = !G.settings[key];
-        G.Game.saveSettings();
+    window.addEventListener('resize', () => G.Render.resize());
+
+    // Bottom Navigation Tabs
+    $$('.nav-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
         G.Audio.play('tap');
-        btn.textContent = G.settings[key] ? 'ON' : 'OFF';
-        btn.className = 'btn btn-sm ' + (G.settings[key] ? 'btn-gold' : 'btn-outline');
-        if (inGame) renderHUD(G.Game.state);
-      };
-      row.appendChild(btn);
-      return row;
-    };
-    wrap.appendChild(mkToggle('効果音 (SFX)', 'sfx'));
-    wrap.appendChild(mkToggle('環境音楽 (BGM)', 'bgm'));
-    wrap.appendChild(mkToggle('振動フィードバック', 'vibration'));
-    wrap.appendChild(mkToggle('画面十字キー表示', 'dpad'));
-
-    if (inGame) {
-      const how = el('button', 'btn btn-outline', '遊び方・操作ガイド');
-      how.onclick = openHelpModal;
-      wrap.appendChild(how);
-
-      const toTitle = el('button', 'btn btn-outline', '中断してタイトルへ戻る');
-      toTitle.onclick = () => {
-        G.Game.stopAuto();
-        G.Audio.stopBgm();
-        closeModal();
-        showScreen('title');
-      };
-      wrap.appendChild(toTitle);
-    }
-    openModal(inGame ? 'メニュー・設定' : '設定', wrap);
-  }
-
-  function openHelpModal() {
-    const wrap = el('div', 'bag-wrap');
-    wrap.innerHTML = `
-      <div class="fantasy-card"><div class="item-name">基本操作（スマホ）</div>
-      <div class="item-desc">・マスをタップするとその場へ移動（または隣接敵へ通常攻撃）。<br>
-      ・画面スワイプでも8方向に1歩ずつ移動できます。<br>
-      ・呪文アイコンをタップで発動、長押しで詳細表示。<br>
-      ・光る赤いマスはボスの予兆攻撃です。1ターン以内に避けましょう！</div></div>
-      <div class="fantasy-card"><div class="item-name">階層と勝利条件</div>
-      <div class="item-desc">・全12階層（4つのバイオーム）。3階ごとに強大なボスが待ち受けます。<br>
-      ・倒れても「星屑」を持ち帰り、聖域で恒久強化や新職解放ができます。</div></div>
-    `;
-    openModal('操作ガイド', wrap);
-  }
-
-  /* Codex / Compendium */
-  function openCodexModal() {
-    const wrap = el('div', 'bag-wrap');
-    const tabs = el('div', 'tab-row');
-    const content = el('div', 'bag-wrap');
-    const showTab = (t) => {
-      content.innerHTML = '';
-      if (t === 'spells') {
-        for (const id of G.SPELL_POOL) {
-          const S = G.SPELLS[id];
-          content.appendChild(el('div', 'fantasy-card item-row', `
-            <img src="${G.Spr.iconURL(id)}" class="item-icon" alt="">
-            <div class="item-info"><div class="item-name">${S.name} (${G.ELEM[S.elem].name} / MP${S.cost[0]})</div>
-            <div class="item-desc">${S.desc(0, S)}</div></div>
-          `));
-        }
-      } else if (t === 'relics') {
-        for (const id of Object.keys(G.RELICS)) {
-          const R = G.RELICS[id];
-          content.appendChild(el('div', 'fantasy-card item-row', `
-            <img src="${G.Spr.iconURL(R.icon)}" class="item-icon" alt="">
-            <div class="item-info"><div class="item-name">${R.name}</div>
-            <div class="item-desc">${R.desc}</div></div>
-          `));
-        }
-      } else {
-        for (const id of Object.keys(G.MONSTERS)) {
-          const M = G.MONSTERS[id];
-          if (M.ally) continue;
-          const sp = G.Spr.s[M.sprite];
-          const imgHtml = M.boss
-            ? `<img src="${bossPortraitURL(id)}" class="codex-boss-portrait" alt="${M.name}">`
-            : `<img src="${G.Spr.spriteURL(sp)}" class="item-icon" alt="">`;
-          content.appendChild(el('div', 'fantasy-card item-row', `
-            ${imgHtml}
-            <div class="item-info"><div class="item-name">${M.name}${M.boss ? ' ★BOSS' : ''}</div>
-            <div class="item-desc">HP ${M.hp} / 攻撃 ${M.atk[0]}-${M.atk[1]} / 防御 ${M.def}</div></div>
-          `));
-        }
-      }
-    };
-    [['spells', '呪文(13)'], ['relics', '遺物(18)'], ['monsters', '魔物']].forEach(([k, label], i) => {
-      const b = el('button', 'btn btn-sm ' + (i === 0 ? 'btn-gold' : 'btn-outline'), label);
-      b.onclick = () => {
-        tabs.querySelectorAll('button').forEach((x) => x.className = 'btn btn-sm btn-outline');
-        b.className = 'btn btn-sm btn-gold';
-        showTab(k);
-        const mb = $('#modal-body');
-        if (mb) mb.scrollTop = 0;
-      };
-      tabs.appendChild(b);
+        switchTab(btn.dataset.tab);
+      });
     });
-    wrap.appendChild(tabs);
-    wrap.appendChild(content);
-    showTab('spells');
-    openModal('魔導書・図鑑', wrap);
+
+    // Sound toggle
+    $('#btn-hub-sound').addEventListener('click', () => {
+      const on = G.Audio.toggle();
+      $('#btn-hub-sound').textContent = on ? '♪' : '✕';
+      showToast(on ? 'サウンド ON' : 'サウンド OFF');
+    });
+
+    // Chapter Carousel
+    $('#btn-prev-chapter').addEventListener('click', () => {
+      const m = G.Game.meta;
+      m.selectedChapter = m.selectedChapter > 1 ? m.selectedChapter - 1 : G.CHAPTERS.length;
+      G.Audio.play('tap');
+      G.Game.saveMeta();
+      renderHub();
+    });
+    $('#btn-next-chapter').addEventListener('click', () => {
+      const m = G.Game.meta;
+      m.selectedChapter = m.selectedChapter < G.CHAPTERS.length ? m.selectedChapter + 1 : 1;
+      G.Audio.play('tap');
+      G.Game.saveMeta();
+      renderHub();
+    });
+
+    // Patrol Claim & Quick Gacha
+    $('#btn-patrol').addEventListener('click', () => {
+      const rw = G.Game.claimPatrol();
+      showToast(`巡回報酬 🪙${rw.gold} / 💎${rw.gems} を獲得！`);
+    });
+    $('#btn-quick-gacha').addEventListener('click', () => {
+      G.Audio.play('tap');
+      switchTab('summon');
+    });
+
+    // Gear 3-to-1 Merge
+    $('#btn-merge-gear').addEventListener('click', () => {
+      const n = G.Game.mergeAllGear();
+      if (n > 0) showToast(`${n}件の装備を上位レアリティへ合成進化しました！`);
+      else showToast('同一種類・同一レアリティの装備が3つ揃うと合成できます');
+    });
+
+    // Gacha Summon Buttons
+    $('#btn-summon-1').addEventListener('click', () => {
+      const r = G.Game.summonGacha(1);
+      if (!r.ok) showToast(r.msg);
+      else openGachaResultsModal(r.items);
+    });
+    $('#btn-summon-10').addEventListener('click', () => {
+      const r = G.Game.summonGacha(10);
+      if (!r.ok) showToast(r.msg);
+      else openGachaResultsModal(r.items);
+    });
+
+    // Start & Resume Battle
+    $('#btn-start-battle').addEventListener('click', () => {
+      G.Audio.play('tap');
+      G.Game.startBattle(G.Game.meta.selectedChapter || 1);
+    });
+    $('#btn-resume-run').addEventListener('click', () => {
+      G.Audio.play('tap');
+      G.Game.resumeRun();
+    });
+
+    // Battle Controls
+    $('#btn-speed').addEventListener('click', () => {
+      const st = G.Game.state;
+      if (!st) return;
+      st.speed = st.speed === 1 ? 2 : st.speed === 2 ? 3 : 1;
+      G.Audio.play('tap');
+      renderBattleHUD(st);
+    });
+    $('#btn-auto').addEventListener('click', () => {
+      const st = G.Game.state;
+      if (!st) return;
+      st.autoAim = !st.autoAim;
+      G.Audio.play('tap');
+      showToast(st.autoAim ? 'AUTO照準・自動発射 ON' : 'AUTO照準 OFF');
+      renderBattleHUD(st);
+    });
+    $('#btn-pause').addEventListener('click', () => {
+      G.Audio.play('tap');
+      openPauseModal();
+    });
+    $('#btn-recall').addEventListener('click', () => {
+      G.Audio.play('tap');
+      G.Game.recallOrbs();
+    });
+    $('#btn-rack-merge').addEventListener('click', () => {
+      const c = G.Game.autoMergeRack();
+      if (c > 0) showToast(`${c}組の星霊弾を一括合成しました！`);
+    });
+    $('#btn-ult').addEventListener('click', () => {
+      const st = G.Game.state;
+      if (!st) return;
+      if (st.ultCharge < st.ultMax) {
+        showToast('奥義ゲージが100%になると発動できます');
+        return;
+      }
+      G.Game.useUltimate();
+    });
+
+    // Modal close
+    $('#modal-close').addEventListener('click', () => {
+      if (!modalLocked) closeModal();
+    });
+
+    // 1-Thumb Drag-and-Release Aiming on Battle Canvas
+    const wrap = $('#arena-wrap');
+    const updateAimFromPointer = (e) => {
+      const st = G.Game.state;
+      if (!st || st.phase !== 'AIM' || st.over) return;
+      const [gx, gy] = G.Render.screenToGrid(e.clientX, e.clientY);
+      const dx = gx - st.launchX;
+      const dy = gy - st.launchY;
+      // Allow both direct drag-toward-target AND pull-back slingshot aiming
+      let ang = Math.atan2(dy, dx);
+      if (dy > 0.15) {
+        ang = Math.atan2(-dy, -dx);
+      }
+      st.aimAngle = G.clamp(ang, -Math.PI + 0.18, -0.18);
+    };
+
+    wrap.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
+      const st = G.Game.state;
+      if (!st || st.phase !== 'AIM' || st.over) return;
+      isAiming = true;
+      updateAimFromPointer(e);
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!isAiming) return;
+      updateAimFromPointer(e);
+    });
+    window.addEventListener('pointerup', () => {
+      if (!isAiming) return;
+      isAiming = false;
+      const st = G.Game.state;
+      if (st && st.phase === 'AIM' && !st.over) {
+        G.Game.fireVolley(st.aimAngle);
+      }
+    });
+
+    // Keyboard accessibility (Left/Right to aim, Space/Enter to fire, U for Ultimate, M to auto-merge)
+    window.addEventListener('keydown', (e) => {
+      if (currentScreen !== 'battle' || $('#modal-backdrop').classList.contains('active')) return;
+      const st = G.Game.state;
+      if (!st || st.over) return;
+      if (e.key === 'ArrowLeft' || e.key === 'a') {
+        st.aimAngle = G.clamp(st.aimAngle - 0.08, -Math.PI + 0.18, -0.18);
+      } else if (e.key === 'ArrowRight' || e.key === 'd') {
+        st.aimAngle = G.clamp(st.aimAngle + 0.08, -Math.PI + 0.18, -0.18);
+      } else if ((e.key === ' ' || e.key === 'Enter') && st.phase === 'AIM') {
+        e.preventDefault();
+        G.Game.fireVolley(st.aimAngle);
+      } else if (e.key === 'u' || e.key === 'U') {
+        G.Game.useUltimate();
+      } else if (e.key === 'm' || e.key === 'M') {
+        G.Game.autoMergeRack();
+      }
+    });
   }
 
-  /* End Run Modal */
-  function openEndModal(ev) {
-    const st = G.Game.state;
-    const wrap = el('div', 'bag-wrap end-wrap');
-    wrap.innerHTML = `
-      <div class="end-hero ${ev.victory ? 'win' : 'lose'}">
-        <img src="${classPortraitURL(st.cls)}" class="end-portrait" alt="${G.CLASSES[st.cls].name}">
-        <div class="end-title">${ev.victory ? '★ 迷宮制覇 ★' : '力尽きた…'}</div>
-        <div class="end-sub">${ev.victory ? '星喰らいの魔王を討ち果たし、迷宮に光を取り戻した！' : `${ev.cause} の前に倒れた。`}</div>
-      </div>
-      <div class="fantasy-card end-stats">
-        <div>到達階層: <strong>B${st.floor}F</strong></div>
-        <div>職業 / Lv: <strong>${G.CLASSES[st.cls].name} Lv.${st.player.lvl}</strong></div>
-        <div>討伐数: <strong>${st.kills} 体</strong></div>
-        <div>獲得金貨: <strong>${st.goldEarned} G</strong></div>
-        <div class="dust-gain">獲得した星屑: <strong>✦ +${ev.dust}</strong></div>
-      </div>
-    `;
-    const again = el('button', 'btn btn-gold', 'もう一度挑む');
-    again.onclick = () => { closeModal(); openClassModal(); };
-    const title = el('button', 'btn btn-outline', 'タイトルへ戻る');
-    title.onclick = () => { closeModal(); showScreen('title'); };
-    wrap.appendChild(again);
-    wrap.appendChild(title);
-    openModal(ev.victory ? '勝利の記録' : '冒険の結果', wrap, { dismissible: false });
+  /* =========================================================
+   *  5. MAIN 60FPS ANIMATION LOOP & GAME EVENT DISPATCHER
+   * ========================================================= */
+  function onGameEvent(st, meta, ev) {
+    if (ev && ev.type === 'battleStart') {
+      switchScreen('battle');
+      renderBattleHUD(st);
+      return;
+    }
+    if (ev && ev.type === 'ultCast') {
+      triggerUltCutIn(ev.hero);
+    }
+    if (ev && ev.type === 'openDraft') {
+      renderBattleHUD(st);
+      openDraftModal(ev.choices);
+      return;
+    }
+    if (ev && ev.type === 'openEncounter') {
+      renderBattleHUD(st);
+      openEncounterModal(ev.kind);
+      return;
+    }
+    if (ev && ev.type === 'battleEnd') {
+      renderBattleHUD(st);
+      openBattleEndModal(ev);
+      return;
+    }
+
+    if (currentScreen === 'battle' && st) {
+      renderBattleHUD(st);
+    } else {
+      renderHub();
+    }
   }
 
-  return { init, showScreen, openModal, closeModal };
+  function loop(now) {
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+
+    if (currentScreen === 'battle' && G.Game.state) {
+      const prevCombo = G.Game.state.combo;
+      const prevFlight = Math.floor(G.Game.state.flightTime);
+      G.Game.update(dt);
+      G.FX.update(dt);
+      G.Render.drawFrame(G.Game.state, dt);
+
+      if (G.Game.state.combo !== prevCombo || Math.floor(G.Game.state.flightTime) !== prevFlight) {
+        renderBattleHUD(G.Game.state);
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function init() {
+    G.Spr.init();
+    G.Game.loadMeta();
+    G.Render.init($('#battle-canvas'));
+    G.Game.onUI(onGameEvent);
+    bindEvents();
+    renderHub();
+    requestAnimationFrame(loop);
+  }
+
+  return { init, switchScreen, switchTab, showToast };
 })();

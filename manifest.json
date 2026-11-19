@@ -1,9 +1,9 @@
 {
-  "name": "星詠みの迷宮 — ARCANA DEPTHS",
-  "short_name": "星詠みの迷宮",
+  "name": "星霊弾のアルカナ — STELLA BREAKER",
+  "short_name": "星霊弾のアルカナ",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#080b12",
-  "theme_color": "#080b12"
+  "background_color": "#070b14",
+  "theme_color": "#070b14"
 }
